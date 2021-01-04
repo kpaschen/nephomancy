@@ -18,7 +18,7 @@ func CostRange(asset *assets.SmallAsset, pricing map[string]([]cache.PricingInfo
 		}
 		minMax, err := asset.MinMaxResourceUsage()
 		if err != nil {
-			fmt.Print("unable to get resource usage: %v\n", err)
+			fmt.Printf("unable to get resource usage: %v\n", err)
 			continue
 		}
 		for res, usage := range minMax {
