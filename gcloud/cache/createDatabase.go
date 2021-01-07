@@ -2,26 +2,24 @@ package cache
 
 import(
 	"database/sql"
-	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func CreateNewDatabase(filename *string) error {
-	os.Remove(*filename)
-	file, err := os.Create(*filename)
+func CreateOrUpdateDatabase(filename *string) error {
+	handle, err := os.OpenFile(*filename, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
-	file.Close()
+	handle.Close()
 	db, _ := sql.Open("sqlite3", *filename)
 	defer db.Close()
 	return createTables(db)
 }
 
 func createTables(db *sql.DB) error {
-	createBillingServicesTableSQL := `CREATE TABLE BillingServices (
+	createBillingServicesTableSQL := `CREATE TABLE IF NOT EXISTS BillingServices (
 		"ServiceId" TEXT NOT NULL PRIMARY KEY,
 		"DisplayName" TEXT NOT NULL,
 		"LastUpdatedTS" INTEGER
@@ -31,7 +29,7 @@ func createTables(db *sql.DB) error {
 	}
 
 	// For regions, the ServiceRegions information looks to be more complete.
-	createSkuTableSQL := `CREATE TABLE Sku (
+	createSkuTableSQL := `CREATE TABLE IF NOT EXISTS Sku (
 		"SkuId" TEXT NOT NULL PRIMARY KEY,
 		"Name" TEXT NOT NULL,
 		"Description" TEXT,
@@ -49,9 +47,10 @@ func createTables(db *sql.DB) error {
 	if err := createTable(db, &createSkuTableSQL); err != nil {
 		return err
 	}
-	createServiceRegionsTableSQL := `CREATE TABLE ServiceRegions (
+	createServiceRegionsTableSQL := `CREATE TABLE IF NOT EXISTS ServiceRegions (
 		"Region" TEXT NOT NULL,
 		"SkuId" TEXT NOT NULL,
+		UNIQUE(Region, SkuId)
 		FOREIGN KEY (SkuId)
 		REFERENCES Sku (SkuId)
 		ON DELETE CASCADE
@@ -60,13 +59,14 @@ func createTables(db *sql.DB) error {
 	if err := createTable(db, &createServiceRegionsTableSQL); err != nil {
 		return err
 	}
-	createPricingInfoTableSQL := `CREATE TABLE PricingInfo (
+	createPricingInfoTableSQL := `CREATE TABLE IF NOT EXISTS PricingInfo (
 		"EffectiveFrom" INTEGER,
 		"Summary" TEXT,
 		"CurrencyConversionRate" REAL NOT NULL,
 		"PricingExpression" TEXT NOT NULL,
 		"AggregationInfo" TEXT,
 		"SkuId" TEXT NOT NULL,
+		UNIQUE(SkuId, EffectiveFrom)
 		FOREIGN KEY (SkuId)
 		REFERENCES Sku (SkuId)
 		ON DELETE CASCADE
@@ -87,31 +87,3 @@ func createTable(db *sql.DB, ct *string) error {
 	return err
 }
 
-func populateTables(db *sql.DB) {
-	insertBillingServiceSQL := `INSERT INTO BillingServices(ServiceId,
-	DisplayName) VALUES (?, ?);`
-	ServiceId := "123"
-	DisplayName := "display name 123"
-	statement, err := db.Prepare(insertBillingServiceSQL)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	_, err = statement.Exec(ServiceId, DisplayName)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-}
-
-func showTables(db *sql.DB) {
-	rows, err := db.Query("Select * from BillingServices;")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var serviceId string
-		var displayName string
-		rows.Scan(&serviceId, &displayName)
-		log.Printf("serviceId: %s displayName: %s\n", serviceId, displayName)
-	}
-}

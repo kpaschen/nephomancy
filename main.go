@@ -13,7 +13,10 @@ func main() {
 	c.Commands = map[string]cli.CommandFactory{
 		"gcloud cost": func() (cli.Command, error) {
 			return &gcmds.CostCommand{
-				// Parameters: project and the dbfile
+			}, nil
+		},
+		"gcloud init": func() (cli.Command, error) {
+			return &gcmds.InitCommand{
 			}, nil
 		},
 		// Add other "gcloud foo" commands here and one "gcloud" for everything unmatched.

@@ -11,7 +11,11 @@ import (
 
 func populateBillingServices(db *sql.DB) error {
 	insertBS := `INSERT INTO BillingServices(ServiceId,
-	DisplayName, LastUpdatedTS) VALUES (?,?,?);`
+	DisplayName, LastUpdatedTS) VALUES (?,?,?)
+	ON CONFLICT(ServiceId) DO UPDATE SET
+	DisplayName=excluded.DisplayName,
+	LastUpdatedTS=excluded.LastUpdatedTS;
+	`
 	statement, err := db.Prepare(insertBS)
 	if err != nil {
 		return err
@@ -31,7 +35,7 @@ func populateBillingServices(db *sql.DB) error {
 }
 
 func populateSkuTable(db *sql.DB, billingServiceName *string) error {
-	insertSku := `INSERT INTO Sku(SkuId, Name, Description,
+	insertSku := `REPLACE INTO Sku(SkuId, Name, Description,
 	ResourceFamily, ResourceGroup, UsageType,
 	ServiceId, GeoTaxonomyType, Regions)
 	VALUES (?,?,?,?,?,?,?,?,?);`
@@ -39,13 +43,13 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 	if err != nil {
 		return err
 	}
-	insertServiceRegions := `INSERT INTO ServiceRegions (Region, SkuId)
+	insertServiceRegions := `REPLACE INTO ServiceRegions (Region, SkuId)
 	VALUES (?,?);`
 	srStatement, err := db.Prepare(insertServiceRegions)
 	if err != nil {
 		return err
 	}
-	insertPricingInfo := `INSERT INTO PricingInfo (EffectiveFrom,
+	insertPricingInfo := `REPLACE INTO PricingInfo (EffectiveFrom,
 	Summary, CurrencyConversionRate, PricingExpression,
 	AggregationInfo, SkuId) VALUES (?,?,?,?,?,?);`
 	pStatement, err := db.Prepare(insertPricingInfo)
@@ -97,6 +101,7 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 }
 
 func PopulateDatabase(db *sql.DB) error {
+	log.Printf("Adding billing services to db\n")
 	err := populateBillingServices(db)
 	if err != nil {
 		return err
@@ -106,6 +111,7 @@ func PopulateDatabase(db *sql.DB) error {
 	const SM = "services/58CD-E7C3-72CA"
 	baseServices := [3]string{CE, KE, SM}
 	for _, s := range baseServices {
+		log.Printf("Adding skus for base service %s to db\n", s)
 		err = populateSkuTable(db, &s)
 	}
 	return err
