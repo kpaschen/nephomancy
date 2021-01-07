@@ -55,7 +55,7 @@ func (c *CostCommand) Run(args []string) int {
 
 	db, err := c.DbHandle()
 	if err != nil {
-		log.Fatalf("Could not open sku cache db: %v\nTry creating it with nephomancy gcloud init. If that does not help, try removing the .nephomancy/gcloud/data directory and then run init again.\n")
+		log.Fatalf("Could not open sku cache db: %v\nTry creating it with nephomancy gcloud init. If that does not help, try removing the .nephomancy/gcloud/data directory and then run init again.\n", err)
 	}
 	defer c.CloseDb()
 
