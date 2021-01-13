@@ -55,6 +55,7 @@ func CostRange(asset *assets.SmallAsset, pricing map[string]([]cache.PricingInfo
 			minRemaining := min
 			maxRemaining := max
 			length := len(pe.TieredRates)
+			// FIXME: nanos are missing for freebies (e.g. ubuntu dev license)
 			for i, r := range pe.TieredRates {
 				unitPrice := (float64(r.Units) * float64(r.Nanos)) / 1000000000.0
 				if i < length - 1 {

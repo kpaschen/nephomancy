@@ -64,7 +64,12 @@ func (c *InitCommand) Run(args []string) int {
 	}
 	defer db.Close()
 
-	err = cache.PopulateDatabase(db)
+	project := c.Command.Project
+	if project == "" {
+		log.Fatalf("Need a project ID.\n")
+	}
+
+	err = cache.PopulateDatabase(db, project)
 	if err != nil {
 		log.Fatalf("Failed to populate database: %v\n", err)
 	}

@@ -39,6 +39,7 @@ func (a *SmallAsset) MinMaxResourceUsage() (map[string]ResourceUsage, error) {
 	case "Compute":
 		// TODO: get the number of cpus and the amount of memory from the compute
 		// api: https://cloud.google.com/compute/docs/reference/rest/v1/machineTypes/list
+		// for golang: godoc.org/google.golang.org/api/compute/v1
 		return map[string]ResourceUsage{
 			"cpu": ResourceUsage{
 				UsageUnit: "h",
@@ -125,6 +126,8 @@ func (a *SmallAsset) ResourceFamily() (string, error) {
 		return "Storage", nil
 	case "RegionDisk":
 		return "Storage", nil
+	case "Project":
+		return "", nil
 	default:
 		log.Printf("No resource family known for %s\n", parts[1])
 		return "", nil
