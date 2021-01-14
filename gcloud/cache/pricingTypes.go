@@ -32,7 +32,6 @@ type Pricing struct {
 
 type PricingInfo struct {
 	CurrencyConversionRate float32
-	EffectiveTime int64
 	PricingExpression *Pricing
 	AggregationInfo string
 }

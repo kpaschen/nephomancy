@@ -17,71 +17,28 @@ type SmallAsset struct {
 	resourceMap map[string]interface{}  // parsed version of ResourceAsJson
 }
 
-type ResourceUsage struct {
-	UsageUnit string  // same kind of string as what is used in PricingExpression, e.g. By.s for bytes-seconds (how many bytes for how many seconds)
-        MinUsage int64
-	MaxUsage int64
-}
-
-func (a *SmallAsset) MinMaxResourceUsage() (map[string]ResourceUsage, error) {
-	rf, _ := a.ResourceFamily()
+func (a *SmallAsset) StorageSize() (int64, error) {
 	if err := a.ensureResourceMap(); err != nil {
-		return nil, err
-	}
-	switch rf {
-	case "Network":
-		return map[string]ResourceUsage{
-			"egress": ResourceUsage{
-				UsageUnit: "gibibyte", // TODO: is this right? Not gibibyte/hour?
-				MinUsage: 0,
-				MaxUsage: -1, // unlimited?
-			}, }, nil
-	case "Compute":
-		// TODO: get the number of cpus and the amount of memory from the compute
-		// api: https://cloud.google.com/compute/docs/reference/rest/v1/machineTypes/list
-		// for golang: godoc.org/google.golang.org/api/compute/v1
-		return map[string]ResourceUsage{
-			"cpu": ResourceUsage{
-				UsageUnit: "h",
-				MinUsage: 0,
-				MaxUsage: 30 * 24,  // multiply with number of cpus?
-			},
-			"memory": ResourceUsage{
-				UsageUnit: "GiBy.h",
-				MinUsage: 0,
-				MaxUsage: 30 * 24 * 7.5,  // multiply with number of cpus
-			},
-		}, nil
-	case "Storage":
-		var diskSize int64
-		abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
+                return 0, err
+        }
+	var diskSize int64
+	abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
+	if ok {
+		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
+		fmt.Printf("disk size parsed: %d\n", diskSize)
+		// The archive size gets reported as 4419062592 for a 4.12 GB image.
+		diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1000?
+		fmt.Printf("disk size adjusted to gb: %d\n", diskSize)
+		// should probably multiply this by number of storage locations?
+	} else {
+		gbytes, ok := a.resourceMap["sizeGb"].(string)
 		if ok {
-			diskSize, _ = strconv.ParseInt(abytes, 10, 64)
-			fmt.Printf("disk size parsed: %d\n", diskSize)
-			// The archive size gets reported as 4419062592 for a 4.12 GB
-			// image.
-			diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1024?
-			fmt.Printf("disk size adjusted to gb: %d\n", diskSize)
-			// should probably multiply this by number of storage locations?
+			diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
 		} else {
-			gbytes, ok := a.resourceMap["sizeGb"].(string)
-			if ok {
-				diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
-			} else {
-				log.Fatalf("Unable to determine storage size for asset %+v", a)
-			}
+			return 0, fmt.Errorf("Unable to determine storage size for asset %+v\n", a)
 		}
-		return map[string]ResourceUsage{
-			"diskspace": ResourceUsage{
-				UsageUnit: "GiBy.mo",
-				MinUsage: 0,
-				MaxUsage: diskSize,
-			}, }, nil
-	default:
-		log.Printf("No known unit for resource family %s\n", rf)
-		return nil, nil
 	}
-	return nil, nil
+	return diskSize, nil
 }
 
 func (a *SmallAsset) BillingService() (string, error) {
@@ -97,19 +54,33 @@ func (a *SmallAsset) BillingService() (string, error) {
 		return "CCD8-9BF1-090E", nil
 	case "monitoring.googleapis.com":
 		return "58CD-E7C3-72CA", nil
+	case "cloudresourcemanager.googleapis.com":
+		return "", nil  // This is the project resource, not sure what else?
+        case "iam.googleapis.com":
+		return "", nil  // ServiceAccountKey, ServiceAccount, what else?
+	case "serviceusage.googleapis.com":
+		return "", nil  // TODO: services, some of them get a charge
 	default:
-		//log.Printf("No billing service configured for asset type %s\n", a.AssetType)
+		log.Printf("No billing service configured for asset type %s, api %s?\n", a.AssetType, parts[0])
 		return "", nil
 	}
 	return "", fmt.Errorf("Reached part after switch statement unexpectedly.\n")
 }
 
-func (a *SmallAsset) ResourceFamily() (string, error) {
+func (a *SmallAsset) BaseType() (string, error) {
 	parts := strings.Split(a.AssetType, "/")
 	if len(parts) != 2 {
 		return "", fmt.Errorf("expected service/resource format for asset type but got %s\n", a.AssetType)
 	}
-	switch parts[1] {
+	return parts[1], nil
+}
+
+func (a *SmallAsset) ResourceFamily() (string, error) {
+	tp, err := a.BaseType()
+	if err != nil {
+		return "", err
+	}
+	switch tp {
 	case "Route":
 		return "Network", nil
 	case "Network":
@@ -129,7 +100,7 @@ func (a *SmallAsset) ResourceFamily() (string, error) {
 	case "Project":
 		return "", nil
 	default:
-		log.Printf("No resource family known for %s\n", parts[1])
+		log.Printf("No resource family known for %s\n", tp)
 		return "", nil
 	}
 }
@@ -187,15 +158,7 @@ func (a *SmallAsset) MachineType() (string, error) {
                 return "", err
         }
         path := strings.Split(u.Path, "/")
-        z := path[len(path)-1]
-        switch z {
-        case "n1-standard-2":
-		return "N1Standard", nil
-        default:
-		log.Printf("Need to add machine type %s\n", z)
-		return "", nil // TODO: add more types
-        }
-	return "", nil
+	return path[len(path)-1], nil
 }
 
 func (a *SmallAsset) DiskType() (string, error) {
@@ -215,15 +178,7 @@ func (a *SmallAsset) DiskType() (string, error) {
 		return "", err
 	}
 	path := strings.Split(u.Path, "/")
-	z := path[len(path)-1]
-	switch z {
-	case "pd-standard":
-		return "PDStandard", nil
-	default:
-		log.Printf("Need to add disk type %s\n", z)
-		return "", nil // TODO: other disk types
-	}
-	return "", nil
+	return path[len(path)-1], nil
 }
 
 func (a *SmallAsset) Regions() ([]string, error) {

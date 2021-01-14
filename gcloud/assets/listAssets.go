@@ -1,3 +1,10 @@
+// Obtain information about the resource assets in use by a given
+// project.
+// This uses the asset api to get the assets being used; the information
+// returned is more or less the same as what you get from the compute api,
+// but you get all the used assets in one call rather than having to go
+// over all the possible asset types.
+
 package assets
 
 import (
@@ -27,7 +34,6 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 		if err != nil {
 			return nil, err
 		}
-		// TODO: maybe use etags and ifNotModified here to only get diffs
 		rt := make([]SmallAsset, len(resp.Assets))
 		for idx, a := range resp.Assets {
 			by, berr := a.Resource.MarshalJSON()

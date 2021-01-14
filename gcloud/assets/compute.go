@@ -162,3 +162,73 @@ func GetProject(project string) error {
 	}
 	return nil
 }
+
+// ListInstances; Disks; BackendServices; BackendBuckets; GlobalAddresses; Images; Licenses / LicenseCodes; Networks; NodeGroups; Subnetworks; and more
+// there's commitments too
+
+// DisksService: Get(project, zone, disk)  -- calls projects/{project}/zones/{zone}/disks/{disk}
+// Disks.List takes project and zone  (these are always zonal disks, use RegionDisks for the others)
+
+func ListDisks(project string) error {
+	ctx := context.Background()
+	const pageSize int64 = 100
+	client, err := compute.NewService(ctx)
+	if err != nil {
+		return err
+	}
+
+	// ret := make([]Instance, 0)
+	nextPageToken := ""
+	for {
+		resp, err := client.Disks.AggregatedList(project).MaxResults(pageSize).PageToken(nextPageToken).Do()
+		if err != nil {
+			return err
+		}
+		// rt := make([]Disk, len(resp.Items))
+		// Items is a map with zone as key
+		for _, scopedList := range resp.Items {
+			for _, instance := range scopedList.Disks {
+				fmt.Printf("disk: %+v\n", instance)
+			}
+		}
+		// ret = append(ret, rt...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = resp.NextPageToken
+	}
+	return nil
+}
+
+func ListInstances(project string) error {
+	ctx := context.Background()
+	const pageSize int64 = 100
+	client, err := compute.NewService(ctx)
+	if err != nil {
+		return err
+	}
+
+	// ret := make([]Instance, 0)
+	nextPageToken := ""
+	for {
+		resp, err := client.Instances.AggregatedList(project).MaxResults(pageSize).PageToken(nextPageToken).Do()
+		if err != nil {
+			return err
+		}
+		// rt := make([]Instance, len(resp.Items))
+		// Items is a map with zone as key
+		for _, scopedList := range resp.Items {
+			for _, instance := range scopedList.Instances {
+				// Good fields: Id, Labels, MachineType, Name, Scheduling, Status
+				fmt.Printf("instance: %+v\n", instance)
+			}
+		}
+		// ret = append(ret, rt...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = resp.NextPageToken
+	}
+	return nil
+}
+

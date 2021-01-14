@@ -53,30 +53,14 @@ func (c *AssetsCommand) Run(args []string) int {
 		fmt.Printf("Asset %+v\n", a)
 	}
 
-	err = assets.GetProject(project)
+	err = assets.ListInstances(project)
 	if err != nil {
-		log.Fatalf("getting project failed: %v\n", err)
+		log.Fatalf("listing instances via compute api failed: %v\n", err)
+	}
+	err = assets.ListDisks(project)
+	if err != nil {
+		log.Fatalf("listing disks via compute api failed: %v\n", err)
 	}
 
-	rz, err := assets.ListZones(project)
-	if err != nil || len(rz) == 0 {
-		log.Fatalf("no zones for project\n")
-	}
-
-	dt, err := assets.ListDiskTypes(project, rz[0].Zone)
-	if err != nil {
-		log.Fatalf("listing disk types failed: %v\n", err)
-	}
-	for _, r := range dt {
-		fmt.Printf("dt: %+v\n", r)
-	}
-
-	dt, err = assets.ListRegionDiskTypes(project, rz[0].Region)
-	if err != nil {
-		log.Fatalf("listing region disk types failed: %v\n", err)
-	}
-	for _, r := range dt {
-		fmt.Printf("r dt: %+v\n", r)
-	}
 	return 0
 }

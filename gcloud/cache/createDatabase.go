@@ -68,8 +68,7 @@ func createBillingTables(db *sql.DB) error {
 		"CurrencyConversionRate" REAL NOT NULL,
 		"PricingExpression" TEXT NOT NULL,
 		"AggregationInfo" TEXT,
-		"SkuId" TEXT NOT NULL,
-		UNIQUE(SkuId, EffectiveFrom)
+		"SkuId" TEXT NOT NULL PRIMARY KEY,
 		FOREIGN KEY (SkuId)
 		REFERENCES Sku (SkuId)
 		ON DELETE CASCADE

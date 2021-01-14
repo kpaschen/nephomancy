@@ -83,7 +83,7 @@ func (c *CostCommand) Run(args []string) int {
 			log.Printf("Zero prices for asset %s\n", a.Name)
 			continue
 		}
-		err = pricing.CostRange(&a, prices)
+		err = pricing.CostRange(db, &a, prices)
 		if err != nil {
 			log.Fatalf("Failed to get price range: %v\n", err)
 		}

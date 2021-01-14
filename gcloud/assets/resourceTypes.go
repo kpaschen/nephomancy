@@ -17,3 +17,8 @@ type DiskType struct {
 	Region string  // if this is set, it's a regional disk
 	DefaultSizeGb int64
 }
+
+type ResourceMetadata struct {
+	Mt MachineType
+	Dt DiskType
+}
