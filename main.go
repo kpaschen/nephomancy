@@ -19,13 +19,15 @@ func main() {
 			return &gcmds.InitCommand{
 			}, nil
 		},
-		// Add other "gcloud foo" commands here and one "gcloud" for everything unmatched.
+		"gcloud assets": func() (cli.Command, error) {
+			return &gcmds.AssetsCommand{
+			}, nil
+		},
 	}
 
 	exitStatus, err := c.Run()
 	if err != nil {
 		log.Println(err)
 	}
-
 	os.Exit(exitStatus)
 }

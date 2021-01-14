@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"nephomancy/gcloud/assets"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func GetPricingInfo(db *sql.DB, asset *assets.SmallAsset) (map[string]([]PricingInfo), error) {
+// Returns a map of sku id to pricing information.
+// Only the most recent pricing info will be used.
+func GetPricingInfo(db *sql.DB, asset *assets.SmallAsset) (map[string](PricingInfo), error) {
 	skus, err := getRelevantSkus(db, asset)
 	if err != nil {
 		return nil, err
@@ -22,51 +23,43 @@ func GetPricingInfo(db *sql.DB, asset *assets.SmallAsset) (map[string]([]Pricing
 	return getPricing(db, skus)
 }
 
-func getPricing(db *sql.DB, skus []string) (map[string]([]PricingInfo), error) {
+func getPricing(db *sql.DB, skus []string) (map[string](PricingInfo), error) {
 	var queryPricingInfo string
-	ret := make(map[string]([]PricingInfo))
+	ret := make(map[string](PricingInfo))
 	for _, skuId := range skus {
 		queryPricingInfo = fmt.Sprintf(`SELECT CurrencyConversionRate, PricingExpression,
-		AggregationInfo, EffectiveFrom FROM PricingInfo where SkuId='%s';`, skuId)
+		AggregationInfo FROM PricingInfo where SkuId='%s';`, skuId)
 		res, err := db.Query(queryPricingInfo)
 		if err != nil {
 			return ret, err
 		}
-		ret[skuId] = make([]PricingInfo, 0)
 		defer res.Close()
 		var currencyConversionRate float32
 		var pricingExpression string
 		var aggregationInfo string
-		var effectiveTime string
 		for res.Next() {
-			err = res.Scan(&currencyConversionRate, &pricingExpression, &aggregationInfo, &effectiveTime)
+			err = res.Scan(&currencyConversionRate, &pricingExpression, &aggregationInfo)
 			if err != nil {
 				log.Printf("error scanning row: %v\n", err)
 				continue
-			}
-			timestamp, err := strconv.ParseInt(effectiveTime, 10, 64)
-                        if err != nil {
-				return nil, err
 			}
 
 			pricing, err := FromJson(&pricingExpression)
 			if err != nil {
 				return ret, err
 			}
-			ret[skuId] = append(ret[skuId], PricingInfo{
+			ret[skuId] = PricingInfo{
 				CurrencyConversionRate: currencyConversionRate,
-				EffectiveTime: timestamp,
 				PricingExpression: pricing,
 				AggregationInfo: aggregationInfo,
-			})
+			}
+			break  // Expect only one result
 		}
 	}
 	return ret, nil
 }
 
 // This gets potentially relevant SKUs for an asset that has a resource.
-// However, it might be better to analyse the overall asset/resource structure in the
-// project to see which assets refer to each other. Or maybe not.
 // Missing: Network resources
 // Also missing: looking at status of resources (currently treat all resources as active/ready)
 // Make sure this returns only SKUs that are relevant.
@@ -154,8 +147,16 @@ func completeInstanceQuery(queryBuilder *strings.Builder, asset *assets.SmallAss
 	if err != nil {
 		return err
 	}
+	// Now the machine type is something like 'n1-standard-2' but the ResourceGroup
+	// only uses part of that, so n1-standard-2 needs ResourceGroup N1Standard.
+	// TODO: not sure if this is always correct, maybe need to do a lookup table.
+	parts := strings.Split(machineType, "-")
+	if len(parts) != 3 {
+		log.Fatalf("Unexpected machine type format %s\n", machineType)
+	}
+	resourceGroup := fmt.Sprintf("%s%s", strings.Title(parts[0]), strings.Title(parts[1]))
 	if machineType != "" {
-		fmt.Fprintf(queryBuilder, " AND Sku.ResourceGroup='%s' ", machineType)
+		fmt.Fprintf(queryBuilder, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	}
 	return nil
 }
@@ -167,29 +168,46 @@ func completeImageQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset)
 
 func completeDiskQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
 	// TODO: look for status "READY"
-
-	// For actual costs, look at sizeGb
-	// can also look at licenses here? or better to do that only on instance?
 	diskType, err := asset.DiskType()
 	if err != nil {
 		return err
 	}
 	if diskType != "" {
-		fmt.Fprintf(queryBuilder, " AND Sku.ResourceGroup='%s' ", diskType)
+
+		resourceGroup := ""
+		switch diskType {
+		case "pd-standard":
+			resourceGroup = "PDStandard"
+		case "ssd":
+			resourceGroup = "SSD"
+		default:
+			return fmt.Errorf(
+				"Unknown disk type %s in completeDiskQuery\n",
+				diskType)
+		}
+		fmt.Fprintf(queryBuilder,
+		" AND Sku.ResourceGroup='%s' ", resourceGroup)
+		bt, err := asset.BaseType()
+		if err != nil {
+			return err
+		}
+		if bt == "RegionalDisk" {
+			queryBuilder.WriteString(
+				" AND Sku.Description like 'Regional %' ")
+		} else {
+			queryBuilder.WriteString(
+				" AND Sku.Description like 'Storage %' ")
+		}
 	}
-
-	// TODO: at least for disks used by images, need to make sure to select the
-	// Sku whose Description starts with "Storage" not "Regional Storage".
-	// Temporary hack: skip the regional storage sku.
-	// queryBuilder.WriteString(" AND Sku.Description like 'Storage %' ")
-
 	// TODO: create other disks and see which SKU they end up with.
 	return nil
 }
 
 func completeQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
-	path := strings.Split(asset.AssetType, "/")
-	at := path[len(path)-1]
+	at, err := asset.BaseType()
+	if err != nil {
+		return err
+	}
 	switch at {
 	case "Instance":
 		return completeInstanceQuery(queryBuilder, asset)

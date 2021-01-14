@@ -1,3 +1,10 @@
+// Obtain information about the resource assets in use by a given
+// project.
+// This uses the asset api to get the assets being used; the information
+// returned is more or less the same as what you get from the compute api,
+// but you get all the used assets in one call rather than having to go
+// over all the possible asset types.
+
 package assets
 
 import (
@@ -19,26 +26,27 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 		return nil, err
 	}
 
-	ret := make([]SmallAsset, pageSize)
+	ret := make([]SmallAsset, 0)
+	nextPageToken := ""
 	for {
-		nextPageToken := ""
 		// TODO: maybe set asset types here, but the new api does not support that.
 		resp, err := client.Assets.List(project).ContentType("RESOURCE").PageSize(pageSize).PageToken(nextPageToken).Do()
 		if err != nil {
 			return nil, err
 		}
-		// TODO: maybe use etags and ifNotModified here to only get diffs
-		for _, a := range resp.Assets {
+		rt := make([]SmallAsset, len(resp.Assets))
+		for idx, a := range resp.Assets {
 			by, berr := a.Resource.MarshalJSON()
 			if berr != nil {
 				return nil, berr
 			}
-			ret = append(ret, SmallAsset{
+			rt[idx] = SmallAsset{
 				Name: a.Name,
 				AssetType: a.AssetType,
 				ResourceAsJson: string(by),
-			})
+			}
 		}
+		ret = append(ret, rt...)
 		if resp.NextPageToken == "" {
 			break
 		}

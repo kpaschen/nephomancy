@@ -73,58 +73,6 @@ func TestRegions(t *testing.T) {
 	}
 }
 
-func TestDiskType(t *testing.T) {
-	pairs := []struct{
-		dType string
-		diskType string
-	}{
-		{"pd-standard","PDStandard"},
-		{"something-else", ""},
-	}
-	for _, pair := range pairs {
-		dMap := map[string]interface{}{
-			"data": map[string]interface{}{
-				"type": pair.dType,
-			},
-		}
-		dBytes, _ := json.Marshal(dMap)
-		a := SmallAsset{
-			ResourceAsJson: string(dBytes),
-		}
-		dt, err := a.DiskType()
-		if err != nil || dt != pair.diskType {
-			t.Errorf("Expected disk type to be %s but got %s, %v\n",
-			pair.diskType, dt, err)
-		}
-	}
-}
-
-func TestMachineType(t *testing.T) {
-	pairs := []struct{
-		mType string
-		machineType string
-	}{
-		{"n1-standard-2","N1Standard"},
-		{"something-else", ""},
-	}
-	for _, pair := range pairs {
-		dMap := map[string]interface{}{
-			"data": map[string]interface{}{
-				"machineType": pair.mType,
-			},
-		}
-		dBytes, _ := json.Marshal(dMap)
-		a := SmallAsset{
-			ResourceAsJson: string(dBytes),
-		}
-		mt, err := a.MachineType()
-		if err != nil || mt != pair.machineType {
-			t.Errorf("Expected machine type to be %s but got %s, %v\n",
-			pair.machineType, mt, err)
-		}
-	}
-}
-
 func TestScheduling(t *testing.T) {
 	dMap := map[string]interface{}{
 		"data": map[string]interface{}{
