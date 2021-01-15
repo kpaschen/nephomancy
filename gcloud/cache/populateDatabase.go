@@ -49,10 +49,17 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 	if err != nil {
 		return err
 	}
-	insertPricingInfo := `REPLACE INTO PricingInfo (EffectiveFrom,
-	Summary, CurrencyConversionRate, PricingExpression,
-	AggregationInfo, SkuId) VALUES (?,?,?,?,?,?);`
+	insertPricingInfo := `REPLACE INTO PricingInfo (
+	Summary, CurrencyConversionRate, BaseUnit, BaseUnitConversionFactor, UsageUnit,
+	AggregationInfo, SkuId) VALUES (?,?,?,?,?,?,?);`
 	pStatement, err := db.Prepare(insertPricingInfo)
+	if err != nil {
+		return err
+	}
+
+	insertTieredRate := `REPLACE INTO TieredRates (CurrencyCode, Nanos, Units,
+	StartUsageAmount, SkuId, TierNumber) VALUES (?,?,?,?,?,?);`
+	tStatement, err := db.Prepare(insertTieredRate)
 	if err != nil {
 		return err
 	}
@@ -88,12 +95,27 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 			}
 		}
 		for _, p := range s.PricingInfo {
-			_, err := pStatement.Exec(p.EffectiveFrom,
+			pr, err := FromJson(&p.PricingExpression)
+			if err != nil {
+				log.Printf("Failed to parse pricing expression %s: %v\n",
+				p.PricingExpression, err)
+				continue
+			}
+			_, err = pStatement.Exec(
 			p.Summary, p.CurrencyConversionRate,
-			p.PricingExpression,
+			pr.BaseUnit, pr.BaseUnitConversionFactor, pr.UsageUnit,
 			p.AggregationInfo, s.SkuId)
 			if err != nil {
 				return err
+			}
+			for tierNo, tier := range pr.TieredRates {
+				_, err = tStatement.Exec(
+					tier.CurrencyCode, tier.Nanos, tier.Units,
+					tier.StartUsageAmount,
+					s.SkuId, tierNo)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

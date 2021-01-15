@@ -63,18 +63,36 @@ func createBillingTables(db *sql.DB) error {
 		return err
 	}
 	createPricingInfoTableSQL := `CREATE TABLE IF NOT EXISTS PricingInfo (
-		"EffectiveFrom" INTEGER,
 		"Summary" TEXT,
 		"CurrencyConversionRate" REAL NOT NULL,
-		"PricingExpression" TEXT NOT NULL,
 		"AggregationInfo" TEXT,
 		"SkuId" TEXT NOT NULL PRIMARY KEY,
+		"BaseUnit" STRING NOT NULL,
+		"BaseUnitConversionFactor" REAL NOT NULL,
+		"UsageUnit" STRING,
 		FOREIGN KEY (SkuId)
 		REFERENCES Sku (SkuId)
 		ON DELETE CASCADE
 		ON UPDATE NO ACTION
 	);`
 	if err := createTable(db, &createPricingInfoTableSQL); err != nil {
+		return err
+	}
+
+	createTieredRatesTableSQL := `CREATE TABLE IF NOT EXISTS TieredRates (
+		"SkuId" TEXT NOT NULL,
+		"TierNumber" INTEGER NOT NULL,
+		"CurrencyCode" STRING,
+		"Nanos" INTEGER,
+		"Units" INTEGER,
+		"StartUsageAmount" INTEGER,
+		PRIMARY KEY (SkuId, TierNumber),
+		FOREIGN KEY (SkuId)
+		REFERENCES PricingInfo (SkuId)
+		ON DELETE CASCADE
+		ON UPDATE NO ACTION
+	);`
+	if err := createTable(db, &createTieredRatesTableSQL); err != nil {
 		return err
 	}
 	return nil
@@ -136,6 +154,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 	createDiskTypesByZoneTableSQL := `CREATE TABLE IF NOT EXISTS DiskTypesByZone (
 		"Zone" STRING NOT NULL,
 		"DiskType" STRING NOT NULL,
+		UNIQUE (Zone, DiskType)
 		FOREIGN KEY (Zone)
 		REFERENCES RegionZone (Zone)
 		ON DELETE CASCADE

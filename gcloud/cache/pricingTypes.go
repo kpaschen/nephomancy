@@ -50,13 +50,13 @@ func (pricingInfo *PricingInfo) AggregationLevel() (string, error) {
 	return lvl, nil
 }
 
-func FromJson(pricingInfo *string) (*Pricing, error) {
-	pBytes := []byte(*pricingInfo)
+func FromJson(pricingExpression *string) (*Pricing, error) {
+	pBytes := []byte(*pricingExpression)
 	var pi map[string]interface{}
 	json.Unmarshal(pBytes, &pi)
 	baseUnit, ok := pi["baseUnit"].(string)
 	if !ok {
-		return nil, fmt.Errorf("missing baseunit on pricing Info %s\n", *pricingInfo)
+		return nil, fmt.Errorf("missing baseunit on pricing expression %s\n", *pricingExpression)
 	}
 	cf, ok := pi["baseUnitConversionFactor"].(float64)
 	if !ok {
