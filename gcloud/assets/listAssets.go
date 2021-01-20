@@ -29,7 +29,6 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 	ret := make([]SmallAsset, 0)
 	nextPageToken := ""
 	for {
-		// TODO: maybe set asset types here, but the new api does not support that.
 		resp, err := client.Assets.List(project).ContentType("RESOURCE").PageSize(pageSize).PageToken(nextPageToken).Do()
 		if err != nil {
 			return nil, err

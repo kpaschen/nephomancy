@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"encoding/json"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
@@ -37,7 +38,7 @@ func (c *AssetsCommand) Run(args []string) int {
 
 	project := c.Command.Project
 	if project == "" {
-		log.Fatalf("Need a project ID. You can see the IDs on the Gcloud console.\n")
+		log.Fatalf("Need a project ID. You can see the IDs on the GCloud console.\n")
 	}
 
 	projectPath := fmt.Sprintf("projects/%s", project)
@@ -46,21 +47,15 @@ func (c *AssetsCommand) Run(args []string) int {
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
 	}
-	for _, a := range ax {
-		if a.AssetType == "" {
-			continue
-		}
-		fmt.Printf("Asset %+v\n", a)
-	}
-
-	err = assets.ListInstances(project)
+	assetStructure, err := assets.BuildAssetStructure(ax)
 	if err != nil {
-		log.Fatalf("listing instances via compute api failed: %v\n", err)
+		log.Fatalf("Structuring assets failed: %v", err)
 	}
-	err = assets.ListDisks(project)
+	structureAsJsonBytes, err := json.MarshalIndent(*assetStructure, "", "  ")
 	if err != nil {
-		log.Fatalf("listing disks via compute api failed: %v\n", err)
+		log.Fatalf("Failed to marshal json: %v", err)
 	}
+	fmt.Printf("structure: %s\n", string(structureAsJsonBytes))
 
 	return 0
 }

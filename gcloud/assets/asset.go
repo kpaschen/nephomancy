@@ -14,7 +14,7 @@ type SmallAsset struct {
         Name string
         AssetType string
         ResourceAsJson string
-	resourceMap map[string]interface{}  // parsed version of ResourceAsJson
+	ResourceMap map[string]interface{}  // parsed version of ResourceAsJson
 }
 
 func (a *SmallAsset) StorageSize() (int64, error) {
@@ -22,7 +22,7 @@ func (a *SmallAsset) StorageSize() (int64, error) {
                 return 0, err
         }
 	var diskSize int64
-	abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
+	abytes, ok := a.ResourceMap["archiveSizeBytes"].(string)
 	if ok {
 		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
 		fmt.Printf("disk size parsed: %d\n", diskSize)
@@ -31,7 +31,7 @@ func (a *SmallAsset) StorageSize() (int64, error) {
 		fmt.Printf("disk size adjusted to gb: %d\n", diskSize)
 		// should probably multiply this by number of storage locations?
 	} else {
-		gbytes, ok := a.resourceMap["sizeGb"].(string)
+		gbytes, ok := a.ResourceMap["sizeGb"].(string)
 		if ok {
 			diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
 		} else {
@@ -106,7 +106,7 @@ func (a *SmallAsset) ResourceFamily() (string, error) {
 }
 
 func (a *SmallAsset) ensureResourceMap() error {
-	if a.resourceMap == nil {
+	if a.ResourceMap == nil {
 		rBytes := []byte(a.ResourceAsJson)
 		var rm map[string]interface{}
 		json.Unmarshal(rBytes, &rm)
@@ -115,7 +115,7 @@ func (a *SmallAsset) ensureResourceMap() error {
 			return fmt.Errorf("expected resource[data] to be another map but it is a %T\n",
 			rm["data"])
 		}
-		a.resourceMap = theMap
+		a.ResourceMap = theMap
 	}
 	return nil
 }
@@ -124,8 +124,8 @@ func (a *SmallAsset) Scheduling() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.resourceMap["scheduling"] != nil {
-                scheduling, ok := a.resourceMap["scheduling"].(map[string]interface{})
+	if a.ResourceMap["scheduling"] != nil {
+                scheduling, ok := a.ResourceMap["scheduling"].(map[string]interface{})
                 if ok {
                         preempt, ok := scheduling["preemptible"].(bool)
                         // TODO: also support Commit1Yr etc
@@ -145,13 +145,13 @@ func (a *SmallAsset) MachineType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.resourceMap["machineType"] == nil {
+	if a.ResourceMap["machineType"] == nil {
 		return "", nil
 	}
-	machineType, ok := a.resourceMap["machineType"].(string)
+	machineType, ok := a.ResourceMap["machineType"].(string)
         if !ok {
 	        return "", fmt.Errorf("expected machine type to be a string but it is a %T\n",
-		a.resourceMap["machineType"])
+		a.ResourceMap["machineType"])
         }
         u, err := url.Parse(machineType)
         if err != nil {
@@ -165,13 +165,13 @@ func (a *SmallAsset) DiskType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.resourceMap["type"] == nil {
+	if a.ResourceMap["type"] == nil {
 		return "", nil
 	}
-	diskType, ok := a.resourceMap["type"].(string)
+	diskType, ok := a.ResourceMap["type"].(string)
 	if !ok {
 		return "", fmt.Errorf("Expected disk type to be a string but it is a %T\n",
-		a.resourceMap["type"])
+		a.ResourceMap["type"])
 	}
 	u, err := url.Parse(diskType)
 	if err != nil {
@@ -181,15 +181,27 @@ func (a *SmallAsset) DiskType() (string, error) {
 	return path[len(path)-1], nil
 }
 
+func (a *SmallAsset) Zone() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.ResourceMap["zone"] == nil {
+		return "None", nil
+	}
+	zone, _ := a.ResourceMap["zone"].(string)
+	path := strings.Split(zone, "/")
+	return path[len(path)-1], nil
+}
+
 func (a *SmallAsset) Regions() ([]string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return nil, err
 	}
 	regions := make([]string, 0)
-	if a.resourceMap["zone"] != nil {
-		zone, ok := a.resourceMap["zone"].(string)
+	if a.ResourceMap["zone"] != nil {
+		zone, ok := a.ResourceMap["zone"].(string)
 		if !ok {
-			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.resourceMap["zone"])
+			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.ResourceMap["zone"])
 		}
 		u, err := url.Parse(zone)
 		if err != nil {
@@ -203,11 +215,11 @@ func (a *SmallAsset) Regions() ([]string, error) {
                 // in the resources afaik.
                 regions = append(regions, z[:len(z)-2])
 	} else {
-                if a.resourceMap["storageLocations"] != nil {
-                        loc, ok := a.resourceMap["storageLocations"].([]interface{})
+                if a.ResourceMap["storageLocations"] != nil {
+                        loc, ok := a.ResourceMap["storageLocations"].([]interface{})
                         if !ok {
                                 fmt.Printf("expected sl to be a string array but it is a %T\n",
-                                a.resourceMap["storageLocations"])
+                                a.ResourceMap["storageLocations"])
                                 return nil, nil
                         }
                         for _, l := range loc {
@@ -222,4 +234,228 @@ func (a *SmallAsset) Regions() ([]string, error) {
 
 	}
 	return regions, nil
+}
+
+func (a *SmallAsset) Networks() ([]string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.ResourceMap["networkInterfaces"] == nil {
+		return nil, nil
+	}
+	nwis, _ := a.ResourceMap["networkInterfaces"].([]interface{})
+	ret := make([]string, len(nwis))
+	for idx, nwi := range nwis {
+		nwix, _ := nwi.(map[string]interface{})
+		nic, _ := nwix["name"].(string)
+		x, _ := nwix["network"].(string)
+		parts := strings.Split(x, "/")
+		nwName := parts[len(parts)-1]
+		x, _ = nwix["subnetwork"].(string)
+		parts = strings.Split(x, "/")
+		snwName := parts[len(parts)-1]
+		ret[idx] = fmt.Sprintf("%s:%s:%s", nic, nwName, snwName)
+	}
+	return ret, nil
+}
+
+func (a *SmallAsset) NetworkName() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.ResourceMap["network"] == nil {
+		return "None", nil
+	}
+	nw, ok := a.ResourceMap["network"].(string)
+	if !ok {
+		return "None", fmt.Errorf("network entry was a %T not a string\n",
+		a.ResourceMap["network"])
+	}
+	parts := strings.Split(nw, "/")
+	return parts[len(parts)-1], nil
+}
+
+func (a *SmallAsset) ServiceAccountName() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.ResourceMap["name"] == nil {
+		return "None", nil
+	}
+	n, ok := a.ResourceMap["name"].(string)
+	if !ok {
+		return "None", fmt.Errorf("name was a %T not a string\n",
+		a.ResourceMap["network"])
+	}
+	parts := strings.Split(n, "/")
+	// service account names have the form projects/<proj name>/serviceAccounts/<email>
+	// keys look like an account name with "keys/<some uuid>" appended
+	if len(parts) < 4 {
+		return "None", fmt.Errorf("unexpected name format for service account or key: %s\n", n)
+	}
+	return parts[3], nil
+}
+
+func (a *SmallAsset) PrettyPrint() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	tp, err := a.BaseType()
+        if err != nil {
+                return "", err
+        }
+        switch tp {
+        case "Route":
+		return a.prettyPrintRoute()
+        case "Network":
+                return a.prettyPrintNetwork()
+        case "Subnetwork":
+                return a.prettyPrintSubnetwork()
+        case "Firewall":
+                return a.prettyPrintFirewall()
+        case "Instance":
+                return a.prettyPrintInstance()
+        case "Image":
+                return a.prettyPrintImage()
+        case "Disk":
+                return a.prettyPrintDisk()
+        case "RegionDisk":
+                return a.prettyPrintRegionDisk()
+        case "Project":
+                return "Project", nil
+	case "ServiceAccountKey":
+		return a.prettyPrintServiceAccountKey()
+	case "ServiceAccount":
+		return a.prettyPrintServiceAccount()
+	case "Service":
+		return a.prettyPrintService()
+        default:
+                log.Printf("No idea how to pretty-print %+v\n", a)
+                return tp, nil
+        }
+}
+
+func (a *SmallAsset) prettyPrintImage() (string, error) {
+	idParts := strings.Split(a.Name, "/")
+	name := idParts[len(idParts)-1]
+	status, _ := a.ResourceMap["status"].(string)
+	regions, _ := a.Regions()
+	size, _ := a.StorageSize()
+	lcs := make([]string, 0)
+	if a.ResourceMap["licenses"] != nil {
+		licenses, _ := a.ResourceMap["licenses"].([]interface{})
+		for _, l := range licenses {
+			lic, _ := l.(string)
+			lcs = append(lcs, lic)
+		}
+	}
+	licenses := fmt.Sprintf("%v", lcs)
+	return fmt.Sprintf(`%s is an Image with size %d Gb in region(s) %s.
+Its current status is %s and the applicable licenses are %s`,
+	name, size, regions, status, licenses), nil
+}
+
+func (a *SmallAsset) prettyPrintDisk() (string, error) {
+	idParts := strings.Split(a.Name, "/")
+	name := idParts[len(idParts)-1]
+	diskType, _ := a.DiskType()
+	zone, _ := a.Zone()
+	status, _ := a.ResourceMap["status"].(string)
+	size, _ := a.StorageSize()
+
+	return fmt.Sprintf(`%s is a zonal disk of type %s in zone %s.
+Its current status is %s and its size is %d Gb.`,
+	name, diskType, zone, status, size), nil
+}
+
+func (a *SmallAsset) prettyPrintRegionDisk() (string, error) {
+	idParts := strings.Split(a.Name, "/")
+	name := idParts[len(idParts)-1]
+	diskType, _ := a.DiskType()
+	regions, _ := a.Regions()
+	status, _ := a.ResourceMap["status"].(string)
+	size, _ := a.StorageSize()
+
+	return fmt.Sprintf(`%s is a region disk of type %s in region(s) %s.
+Its current status is %s and its size is %d Gb.`,
+	name, diskType, regions, status, size), nil
+}
+
+func (a *SmallAsset) prettyPrintInstance() (string, error) {
+	idParts := strings.Split(a.Name, "/")
+	name := idParts[len(idParts)-1]
+	scheduling, _ := a.Scheduling()
+	status, _ := a.ResourceMap["status"].(string)
+	machineType, _ := a.MachineType()
+	regions, _ := a.Regions()
+	networks, _ := a.Networks()
+
+	return fmt.Sprintf(`%s is an instance of type %s in region(s) %s.
+Its current status is %s. It uses %s scheduling.
+It is on network %+v`,
+	name, machineType, regions, status, scheduling, networks), nil
+}
+
+func (a *SmallAsset) prettyPrintRoute() (string, error) {
+	name, _ := a.ResourceMap["name"].(string)
+	description, _ := a.ResourceMap["description"].(string)
+	return fmt.Sprintf("route %s: %s\n", name, description), nil
+}
+
+func (a *SmallAsset) prettyPrintNetwork() (string, error) {
+	name, _ := a.ResourceMap["name"].(string)
+	routingConfig, _ := a.ResourceMap["routingConfig"].(map[string]interface{})
+	routingMode, _ := routingConfig["routingMode"].(string)
+	subnetworks, _ := a.ResourceMap["subnetworks"].([]interface{})
+	subnw := make([]string, len(subnetworks))
+	for idx, snw := range subnetworks {
+		s, _ := snw.(string)
+		parts := strings.Split(s, "/")
+		snwName := parts[len(parts)-1]
+		region := parts[len(parts)-3]
+		subnw[idx] = fmt.Sprintf("%s:%s", region, snwName)
+	}
+	return fmt.Sprintf("network %s with routing mode %s and subnetworks %v\n",
+	name, routingMode, subnw), nil
+}
+
+func (a *SmallAsset) prettyPrintSubnetwork() (string, error) {
+	name, _ := a.ResourceMap["name"].(string)
+	purpose, _ := a.ResourceMap["purpose"].(string)
+	r, _ := a.ResourceMap["region"].(string)
+	p := strings.Split(r, "/")
+	region := p[len(p)-1]
+	ipCidrRange := a.ResourceMap["ipCidrRange"].(string)
+	return fmt.Sprintf("Subnetwork %s: %s in region %s with ip range %s\n",
+	name, purpose, region, ipCidrRange), nil
+}
+
+func (a *SmallAsset) prettyPrintFirewall() (string, error) {
+	name, _ := a.ResourceMap["name"].(string)
+	description, _ := a.ResourceMap["description"].(string)
+	network, _ := a.ResourceMap["network"].(string)
+	nwParts := strings.Split(network, "/")
+	networkName := nwParts[len(nwParts)-1]
+	return fmt.Sprintf("Firewall %s: %s on network %s\n", name, description, networkName), nil
+}
+
+func (a *SmallAsset) prettyPrintService() (string, error) {
+	name, _ := a.ResourceMap["name"].(string)
+	state, _ := a.ResourceMap["state"].(string)
+	return fmt.Sprintf("Service %s in state %s\n", name, state), nil
+}
+
+func (a *SmallAsset) prettyPrintServiceAccount() (string, error) {
+	displayname, _ := a.ResourceMap["displayName"].(string)
+	description, _ := a.ResourceMap["description"].(string)
+	email, _ := a.ResourceMap["email"].(string)
+	return fmt.Sprintf("ServiceAccount %s: %s (%s)\n", email, displayname, description), nil
+}
+
+func (a *SmallAsset) prettyPrintServiceAccountKey() (string, error) {
+	keytype, _ := a.ResourceMap["keyType"].(string)
+	name, _ := a.ResourceMap["name"].(string)
+	parts := strings.Split(name, "/")
+	serviceAccountEmail := parts[len(parts)-3]
+	return fmt.Sprintf("ServiceAccountKey for account %s has type %s\n", serviceAccountEmail, keytype), nil
 }
