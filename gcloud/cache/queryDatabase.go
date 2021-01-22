@@ -73,10 +73,6 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, asset assets.BaseAsset) {
 		return
 	}
 	resource := asset.ResourceFamily()
-	// TODO: network-related skus
-	if resource == "Network" {
-		return
-	}
 	regions := asset.Regions()
 	fmt.Fprintf(querySku, `SELECT Sku.SkuId
 	FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
@@ -149,6 +145,59 @@ func GetSkusForImage(db *sql.DB, asset assets.Image) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, asset)
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func GetSkusForNetwork(db *sql.DB, asset assets.Network) ([]string, error) {
+	// egress region to region service: services/compute. rf: Network. ServiceRegion: the subnetwork's region
+	// rg can be VPNInternetEgress, InterregionEgress, VPNInterregionEgress, PremiumInternetEgress, InterzoneEgress
+	// LoadBalancing, InterconnectPort, VPNTunnel, NAT
+
+	// get the network tier. default is set on project ("defaultNetworkTier" can be "PREMIUM" or "STANDARD"). can also be set on vm nic.
+	// probably only need to look at egress from regions where there are vms or storage.
+	// actually only vms for now, since storage and spanner have their own pricing,
+	// which apparently includes network.
+
+	// generally no charge for ingress, but there is a charge for load balancers, nat,
+	// protocol forwarding (which all process ingress traffic that comes from outside the
+	// gcloud network)
+
+	// generally 20c per GB is a good upper bound in premium tier. standard is less than
+	// half that.
+
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, asset)
+	maxTier := "STANDARD"
+	regions := make([]string, 0)
+	for _, sw := range asset.Subnetworks {
+		if sw.MaxTier != "" {
+			regions = append(regions, sw.Region)
+			if sw.MaxTier != "STANDARD" {
+				maxTier = sw.MaxTier
+			}
+		}
+	}
+	// There are more types of egress, e.g. for VPNs. But this should give an
+	// upper bound?
+	if maxTier == "PREMIUM" {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
+	} else {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='InterregionEgress' ")
+	}
+	if len(regions) > 0 {
+		fmt.Fprintf(&querySku, " AND ServiceRegions.Region IN (")
+		rcount := len(regions)
+		for i, r := range regions {
+			if i == rcount - 1 {
+				fmt.Fprintf(&querySku, "'%s'", r)
+			} else {
+				fmt.Fprintf(&querySku, "'%s',", r)
+			}
+		}
+		fmt.Fprintf(&querySku, ") ")
+	}
+	fmt.Fprintf(&querySku, ";")
+
 	return getSkusForQuery(db, querySku.String())
 }
 

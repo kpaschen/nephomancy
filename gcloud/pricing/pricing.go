@@ -40,7 +40,19 @@ func GetCost(db *sql.DB, project assets.AssetStructure) error {
 			}
                 }
         }
-	// TODO: networks (those referenced by an instance nic)
+	for _, nw := range project.Networks {
+		skus, err := cache.GetSkusForNetwork(db, *nw)
+		if err != nil {
+			return err
+		}
+		pi, err := cache.GetPricingInfo(db, skus)
+		if err != nil {
+			return err
+		}
+		if err = costRange(db, *nw, pi); err != nil {
+			return err
+		}
+	}
         // TODO: services, licenses
 
 	return nil
@@ -75,7 +87,7 @@ func costRange(db *sql.DB, asset assets.BaseAsset, pricing map[string](cache.Pri
 			}
 		}
 		if !found {
-			fmt.Printf("sku %s: No resource known for price %v\n", skuId, price)
+			fmt.Printf("sku %s: No resource known for price %v\n", skuId, pe)
 			continue
 		}
 		maxTotal := 0.0
@@ -110,8 +122,9 @@ func costRange(db *sql.DB, asset assets.BaseAsset, pricing map[string](cache.Pri
 			}
 		}
 		cc := pe.TieredRates[0].CurrencyCode
-		fmt.Printf("%s: max usage of %d %s would create a charge of %f %s per month\n",
-		resourceName, maxUsage, pe.UsageUnit, maxTotal, cc)
+		if maxUsage > 0 {
+			fmt.Printf("%s: max usage of %d %s would create a charge of %f %s per month\n", resourceName, maxUsage, pe.UsageUnit, maxTotal, cc)
+		}
 	}
 	return nil
 }

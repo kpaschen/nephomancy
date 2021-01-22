@@ -39,6 +39,7 @@ type Subnetwork struct {
 	IpRange string
 	Region string
 	networkName string
+	MaxTier string
 }
 func (Subnetwork) ResourceFamily() string { return "Network" }
 func (Subnetwork) BillingService() string { return BS_COMPUTE }
@@ -46,11 +47,11 @@ func (s Subnetwork) Regions() []string { return []string{s.Region} }
 func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	return map[string]ResourceUsage{
 		"egress": ResourceUsage{
-			UsageUnit: "gibibyte",
+			UsageUnit: "GiBy",
 			MaxUsage: -1, // is this unlimited?
 		},
 		"ingress": ResourceUsage{
-			UsageUnit: "gibitye",
+			UsageUnit: "GiBy",
 			MaxUsage: -1,
 		},
 	}, nil
@@ -68,7 +69,7 @@ func (Route) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, 
 type Network struct {
 	Name string
         Routes []Route
-	Subnetworks []Subnetwork
+	Subnetworks []*Subnetwork
 	Firewalls []Firewall
 }
 func (Network) ResourceFamily() string { return "Network" }
@@ -77,11 +78,11 @@ func (Network) Regions() []string { return nil }
 func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	return map[string]ResourceUsage{
 		"egress": ResourceUsage{
-			UsageUnit: "gibibyte",
+			UsageUnit: "GiBy",
 			MaxUsage: -1, // is this unlimited?
 		},
 		"ingress": ResourceUsage{
-			UsageUnit: "gibitye",
+			UsageUnit: "GiBy",
 			MaxUsage: -1,
 		},
 	}, nil
@@ -170,6 +171,7 @@ type Nic struct {
 	Name string
 	NetworkName string
 	SubnetworkName string
+	NetworkTier string
 }
 
 type Instance struct {
@@ -223,6 +225,7 @@ type AssetStructure struct {
 	Disks []*Disk
 	ServiceAccounts []*ServiceAccount
 	Services []*Service
+	DefaultNetworkTier string
 
 	danglingRoutes []Route
 	danglingSubnetworks []Subnetwork
@@ -246,10 +249,20 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 			x, _ = networkInterface["subnetwork"].(string)
 			parts = strings.Split(x, "/")
 			subnetworkName := parts[len(parts)-1]
+			ac, _ := networkInterface["accessConfigs"].([]interface{})
+			tier := ""  // if not set, the project's default tier will take effect.
+			// Currently, there is only at most one config, and the type is always
+			// ONE_TO_ONE_NAT. When there is no config, the instance has no
+			// access to the internet.
+			for _, config := range ac {
+				cfg := config.(map[string]interface{})
+				tier, _ = cfg["networkTier"].(string)
+			}
 			nic := Nic {
 				Name: nicName,
 				NetworkName: networkName,
 				SubnetworkName: subnetworkName,
+				NetworkTier: tier,
 			}
 			nics = append(nics, nic)
 		}
@@ -348,6 +361,16 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 	return nil
 }
 
+// only interested in the default network tier for now
+func (as *AssetStructure) buildProject(a SmallAsset) error {
+	as.DefaultNetworkTier = "PREMIUM"
+	if a.resourceMap["defaultNetworkTier"] != nil {
+		tier, _ := a.resourceMap["defaultNetworkTier"].(string)
+		as.DefaultNetworkTier = tier
+	}
+	return nil
+}
+
 func (as *AssetStructure) buildService(a SmallAsset) error {
 	name, _ := a.resourceMap["name"].(string)
 	state, _ := a.resourceMap["state"].(string)
@@ -423,7 +446,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 		if s.networkName != networkName {
 			ds = append(ds, s)
 		} else {
-			n.Subnetworks = append(n.Subnetworks, s)
+			n.Subnetworks = append(n.Subnetworks, &s)
 		}
 	}
 	as.danglingSubnetworks = ds
@@ -503,13 +526,61 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	for _, n := range as.Networks {
 		if n.Name == network {
 			// TODO: avoid adding duplicates.
-			n.Subnetworks = append(n.Subnetworks, s)
+			n.Subnetworks = append(n.Subnetworks, &s)
 			found = true
 			break
 		}
 	}
 	if !found {
 		as.danglingSubnetworks = append(as.danglingSubnetworks, s)
+	}
+	return nil
+}
+
+func (as *AssetStructure) reconcile() error {
+	if len(as.danglingRoutes) > 0 {
+		return fmt.Errorf("orphaned routes: %+v\n", as.danglingRoutes)
+	}
+	if len(as.danglingSubnetworks) > 0 {
+		return fmt.Errorf("orphaned Subnetworks: %+v\n", as.danglingSubnetworks)
+	}
+	if len(as.danglingFirewalls) > 0 {
+		return fmt.Errorf("orphaned Firewalls: %+v\n", as.danglingFirewalls)
+	}
+	if len(as.danglingImages) > 0 {
+		return fmt.Errorf("orphaned Images: %+v\n", as.danglingImages)
+	}
+
+	// See which subnetworks are in use by which instances, and record the maximum
+	// network tier applicable per subnetwork.
+	tier := as.DefaultNetworkTier
+	for _, inst := range as.Instances {
+		for _, nic := range inst.Nics {
+			nwName := nic.NetworkName
+			sName := nic.SubnetworkName
+			found := false
+			if nic.NetworkTier != "" {
+				tier = nic.NetworkTier
+			}
+			for _, nw := range as.Networks {
+				if nw.Name != nwName {
+					continue
+				}
+				for _, sw := range nw.Subnetworks {
+					if sw.Name != sName {
+						continue
+					}
+					found = true
+					// There are only two tiers, PREMIUM and STANDARD
+					if sw.MaxTier != "PREMIUM" {
+						sw.MaxTier = tier
+					}
+				}
+			}
+			if !found {
+				return fmt.Errorf("Instance %+v refers to non-existent network/subnetwork %s/%s\n", inst, nwName, sName)
+			}
+		}
 	}
 	return nil
 }
@@ -547,7 +618,9 @@ func BuildAssetStructure(ax []SmallAsset) (*AssetStructure, error) {
 		case "Service": if err = ret.buildService(as); err != nil {
 			return nil, err
 		}
-		case "Project": continue
+		case "Project": if err = ret.buildProject(as); err != nil {
+			return nil, err
+		}
 		case "Disk": if err = ret.buildDisk(as, false); err != nil {
 			return nil, err
 		}
@@ -563,6 +636,9 @@ func BuildAssetStructure(ax []SmallAsset) (*AssetStructure, error) {
 	        default: fmt.Printf("not handling type %s yet\n", bt)
 		continue
 		}
+	}
+	if err := ret.reconcile(); err != nil {
+		return nil, err
 	}
 	return &ret, nil
 }
