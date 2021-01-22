@@ -14,7 +14,7 @@ type SmallAsset struct {
         Name string
         AssetType string
         ResourceAsJson string
-	ResourceMap map[string]interface{}  // parsed version of ResourceAsJson
+	resourceMap map[string]interface{}  // parsed version of ResourceAsJson
 }
 
 func (a *SmallAsset) StorageSize() (int64, error) {
@@ -22,13 +22,13 @@ func (a *SmallAsset) StorageSize() (int64, error) {
                 return 0, err
         }
 	var diskSize int64
-	abytes, ok := a.ResourceMap["archiveSizeBytes"].(string)
+	abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
 	if ok {
 		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
 		// The archive size gets reported as 4419062592 for a 4.12 GB image.
 		diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1000?
 	} else {
-		gbytes, ok := a.ResourceMap["sizeGb"].(string)
+		gbytes, ok := a.resourceMap["sizeGb"].(string)
 		if ok {
 			diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
 		} else {
@@ -103,7 +103,7 @@ func (a *SmallAsset) ResourceFamily() (string, error) {
 }
 
 func (a *SmallAsset) ensureResourceMap() error {
-	if a.ResourceMap == nil {
+	if a.resourceMap == nil {
 		rBytes := []byte(a.ResourceAsJson)
 		var rm map[string]interface{}
 		json.Unmarshal(rBytes, &rm)
@@ -112,7 +112,7 @@ func (a *SmallAsset) ensureResourceMap() error {
 			return fmt.Errorf("expected resource[data] to be another map but it is a %T\n",
 			rm["data"])
 		}
-		a.ResourceMap = theMap
+		a.resourceMap = theMap
 	}
 	return nil
 }
@@ -121,8 +121,8 @@ func (a *SmallAsset) Scheduling() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["scheduling"] != nil {
-                scheduling, ok := a.ResourceMap["scheduling"].(map[string]interface{})
+	if a.resourceMap["scheduling"] != nil {
+                scheduling, ok := a.resourceMap["scheduling"].(map[string]interface{})
                 if ok {
                         preempt, ok := scheduling["preemptible"].(bool)
                         // TODO: also support Commit1Yr etc
@@ -142,13 +142,13 @@ func (a *SmallAsset) MachineType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["machineType"] == nil {
+	if a.resourceMap["machineType"] == nil {
 		return "", nil
 	}
-	machineType, ok := a.ResourceMap["machineType"].(string)
+	machineType, ok := a.resourceMap["machineType"].(string)
         if !ok {
 	        return "", fmt.Errorf("expected machine type to be a string but it is a %T\n",
-		a.ResourceMap["machineType"])
+		a.resourceMap["machineType"])
         }
         u, err := url.Parse(machineType)
         if err != nil {
@@ -162,13 +162,13 @@ func (a *SmallAsset) DiskType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["type"] == nil {
+	if a.resourceMap["type"] == nil {
 		return "", nil
 	}
-	diskType, ok := a.ResourceMap["type"].(string)
+	diskType, ok := a.resourceMap["type"].(string)
 	if !ok {
 		return "", fmt.Errorf("Expected disk type to be a string but it is a %T\n",
-		a.ResourceMap["type"])
+		a.resourceMap["type"])
 	}
 	u, err := url.Parse(diskType)
 	if err != nil {
@@ -182,10 +182,10 @@ func (a *SmallAsset) Zone() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["zone"] == nil {
+	if a.resourceMap["zone"] == nil {
 		return "None", nil
 	}
-	zone, _ := a.ResourceMap["zone"].(string)
+	zone, _ := a.resourceMap["zone"].(string)
 	path := strings.Split(zone, "/")
 	return path[len(path)-1], nil
 }
@@ -195,10 +195,10 @@ func (a *SmallAsset) Regions() ([]string, error) {
 		return nil, err
 	}
 	regions := make([]string, 0)
-	if a.ResourceMap["zone"] != nil {
-		zone, ok := a.ResourceMap["zone"].(string)
+	if a.resourceMap["zone"] != nil {
+		zone, ok := a.resourceMap["zone"].(string)
 		if !ok {
-			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.ResourceMap["zone"])
+			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.resourceMap["zone"])
 		}
 		u, err := url.Parse(zone)
 		if err != nil {
@@ -212,11 +212,11 @@ func (a *SmallAsset) Regions() ([]string, error) {
                 // in the resources afaik.
                 regions = append(regions, z[:len(z)-2])
 	} else {
-                if a.ResourceMap["storageLocations"] != nil {
-                        loc, ok := a.ResourceMap["storageLocations"].([]interface{})
+                if a.resourceMap["storageLocations"] != nil {
+                        loc, ok := a.resourceMap["storageLocations"].([]interface{})
                         if !ok {
                                 fmt.Printf("expected sl to be a string array but it is a %T\n",
-                                a.ResourceMap["storageLocations"])
+                                a.resourceMap["storageLocations"])
                                 return nil, nil
                         }
                         for _, l := range loc {
@@ -237,10 +237,10 @@ func (a *SmallAsset) Networks() ([]string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return nil, err
 	}
-	if a.ResourceMap["networkInterfaces"] == nil {
+	if a.resourceMap["networkInterfaces"] == nil {
 		return nil, nil
 	}
-	nwis, _ := a.ResourceMap["networkInterfaces"].([]interface{})
+	nwis, _ := a.resourceMap["networkInterfaces"].([]interface{})
 	ret := make([]string, len(nwis))
 	for idx, nwi := range nwis {
 		nwix, _ := nwi.(map[string]interface{})
@@ -260,13 +260,13 @@ func (a *SmallAsset) NetworkName() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["network"] == nil {
+	if a.resourceMap["network"] == nil {
 		return "None", nil
 	}
-	nw, ok := a.ResourceMap["network"].(string)
+	nw, ok := a.resourceMap["network"].(string)
 	if !ok {
 		return "None", fmt.Errorf("network entry was a %T not a string\n",
-		a.ResourceMap["network"])
+		a.resourceMap["network"])
 	}
 	parts := strings.Split(nw, "/")
 	return parts[len(parts)-1], nil
@@ -276,13 +276,13 @@ func (a *SmallAsset) ServiceAccountName() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.ResourceMap["name"] == nil {
+	if a.resourceMap["name"] == nil {
 		return "None", nil
 	}
-	n, ok := a.ResourceMap["name"].(string)
+	n, ok := a.resourceMap["name"].(string)
 	if !ok {
 		return "None", fmt.Errorf("name was a %T not a string\n",
-		a.ResourceMap["network"])
+		a.resourceMap["network"])
 	}
 	parts := strings.Split(n, "/")
 	// service account names have the form projects/<proj name>/serviceAccounts/<email>
