@@ -235,8 +235,8 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 	idParts := strings.Split(a.Name, "/")
 	name := idParts[len(idParts)-1]
 	nics := make([]Nic, 0)
-	if a.ResourceMap["networkInterfaces"] != nil {
-		nw, _ := a.ResourceMap["networkInterfaces"].([]interface{})
+	if a.resourceMap["networkInterfaces"] != nil {
+		nw, _ := a.resourceMap["networkInterfaces"].([]interface{})
 		for _, nwi := range nw {
 			networkInterface, _ := nwi.(map[string]interface{})
 			nicName, _ := networkInterface["name"].(string)
@@ -273,7 +273,7 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
-	diskName, _ := a.ResourceMap["name"].(string)
+	diskName, _ := a.resourceMap["name"].(string)
 	regions, err := a.Regions()
 	if err != nil || len(regions) == 0 {
 		return fmt.Errorf("missing both zone and region for disk %+v\n", a)
@@ -305,15 +305,15 @@ func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 }
 
 func (as *AssetStructure) buildImage(a SmallAsset) error {
-	if a.ResourceMap["sourceDisk"] == nil {
+	if a.resourceMap["sourceDisk"] == nil {
 		return fmt.Errorf("missing sourceDisk resource for image %+v\n", a)
 	}
-	sdn, _ := a.ResourceMap["sourceDisk"].(string)
+	sdn, _ := a.resourceMap["sourceDisk"].(string)
 	parts := strings.Split(sdn, "/")
 	sourceDiskName := parts[len(parts)-1]
 	licenses := make([]string, 0)
-	if a.ResourceMap["licenses"] != nil {
-		lcs, _ := a.ResourceMap["licenses"].([]interface{})
+	if a.resourceMap["licenses"] != nil {
+		lcs, _ := a.resourceMap["licenses"].([]interface{})
 		for _, l := range lcs {
 			lc, _ := l.(string)
 			licenses = append(licenses, lc)
@@ -322,7 +322,7 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 	idParts := strings.Split(a.Name, "/")
 	storageSize, _ := a.StorageSize()
 	regions := make([]string, 0)
-	storageLocations, _ := a.ResourceMap["storageLocations"].([]interface{})
+	storageLocations, _ := a.resourceMap["storageLocations"].([]interface{})
 	for _, stl := range storageLocations {
 		loc, _ := stl.(string)
 		regions = append(regions, loc)
@@ -349,8 +349,8 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildService(a SmallAsset) error {
-	name, _ := a.ResourceMap["name"].(string)
-	state, _ := a.ResourceMap["state"].(string)
+	name, _ := a.resourceMap["name"].(string)
+	state, _ := a.resourceMap["state"].(string)
 	sv := Service{
 		Name: name,
 		State: state,
@@ -443,7 +443,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 
 func (as *AssetStructure) buildFirewall(a SmallAsset) error {
 	networkName, _ := a.NetworkName()
-	name, _  := a.ResourceMap["name"].(string)
+	name, _  := a.resourceMap["name"].(string)
 	f := Firewall{
 		Name: name,
 		networkName: networkName,
@@ -464,7 +464,7 @@ func (as *AssetStructure) buildFirewall(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildRoute(a SmallAsset) error {
-	ipRange, _ := a.ResourceMap["destRange"].(string)
+	ipRange, _ := a.resourceMap["destRange"].(string)
 	networkName, _ := a.NetworkName()
 	r := Route{
 		IpRange: ipRange,
@@ -487,9 +487,9 @@ func (as *AssetStructure) buildRoute(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
-	ipRange, _ := a.ResourceMap["ipCidrRange"].(string)
-	name, _ := a.ResourceMap["name"].(string)
-	fullRegion, _ := a.ResourceMap["region"].(string)
+	ipRange, _ := a.resourceMap["ipCidrRange"].(string)
+	name, _ := a.resourceMap["name"].(string)
+	fullRegion, _ := a.resourceMap["region"].(string)
 	parts := strings.Split(fullRegion, "/")
 	region := parts[len(parts)-1]
 	network, _ := a.NetworkName()
