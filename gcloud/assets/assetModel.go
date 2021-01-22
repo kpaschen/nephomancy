@@ -254,9 +254,9 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 			nics = append(nics, nic)
 		}
 	}
-	zone, _ := a.Zone()
-	machineType, _ := a.MachineType()
-	scheduling, _ := a.Scheduling()
+	zone, _ := a.zone()
+	machineType, _ := a.machineType()
+	scheduling, _ := a.scheduling()
 	fingerprint := fmt.Sprintf("%s:%s:%s", machineType, zone, scheduling)
 
 	inst := Instance{
@@ -274,7 +274,7 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 
 func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 	diskName, _ := a.resourceMap["name"].(string)
-	regions, err := a.Regions()
+	regions, err := a.regions()
 	if err != nil || len(regions) == 0 {
 		return fmt.Errorf("missing both zone and region for disk %+v\n", a)
 	}
@@ -282,8 +282,8 @@ func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 		return fmt.Errorf("multiple regions for regional disk? %+v\n", a)
 	}
 	zoneOrRegion := regions[0]
-	storageSize, _ := a.StorageSize()
-	diskType, _ := a.DiskType()
+	storageSize, _ := a.storageSize()
+	diskType, _ := a.diskType()
 	disk := Disk{
 		Name: diskName,
 		IsRegional: isRegional,
@@ -320,7 +320,7 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 		}
 	}
 	idParts := strings.Split(a.Name, "/")
-	storageSize, _ := a.StorageSize()
+	storageSize, _ := a.storageSize()
 	regions := make([]string, 0)
 	storageLocations, _ := a.resourceMap["storageLocations"].([]interface{})
 	for _, stl := range storageLocations {
@@ -360,7 +360,7 @@ func (as *AssetStructure) buildService(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildServiceAccountKey(a SmallAsset) error {
-	name, err := a.ServiceAccountName()
+	name, err := a.serviceAccountName()
 	if err != nil {
 		return err
 	}
@@ -382,7 +382,7 @@ func (as *AssetStructure) buildServiceAccountKey(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildServiceAccount(a SmallAsset) error {
-	name, err := a.ServiceAccountName()
+	name, err := a.serviceAccountName()
 	if err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 }
 
 func (as *AssetStructure) buildFirewall(a SmallAsset) error {
-	networkName, _ := a.NetworkName()
+	networkName, _ := a.networkName()
 	name, _  := a.resourceMap["name"].(string)
 	f := Firewall{
 		Name: name,
@@ -465,7 +465,7 @@ func (as *AssetStructure) buildFirewall(a SmallAsset) error {
 
 func (as *AssetStructure) buildRoute(a SmallAsset) error {
 	ipRange, _ := a.resourceMap["destRange"].(string)
-	networkName, _ := a.NetworkName()
+	networkName, _ := a.networkName()
 	r := Route{
 		IpRange: ipRange,
 		networkName: networkName,
@@ -492,7 +492,7 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	fullRegion, _ := a.resourceMap["region"].(string)
 	parts := strings.Split(fullRegion, "/")
 	region := parts[len(parts)-1]
-	network, _ := a.NetworkName()
+	network, _ := a.networkName()
         s := Subnetwork{
 		Name: name,
 		IpRange: ipRange,

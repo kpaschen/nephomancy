@@ -8,55 +8,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func GetResourceMetadata(db *sql.DB, asset *assets.SmallAsset) (*assets.ResourceMetadata, error) {
-	rf, _ := asset.ResourceFamily()
-	switch rf {
-	case "Compute":
-		mt, err := asset.MachineType()
-		if err != nil {
-			return nil, err
-		}
-		mtd, err := getMachineType(db, mt)
-		if err != nil {
-			return nil, err
-		}
-		return &assets.ResourceMetadata{
-			Mt: mtd,
-		}, nil
-	case "Storage":
-		dt, err := asset.BaseType()
-		if err != nil {
-			return nil, err
-		}
-		region := ""
-		if dt == "RegionDisk" {
-			regions, err := asset.Regions()
-			if err != nil {
-				return nil, err
-			}
-			if len(regions) > 0 {
-				region = regions[0]
-			}
-		} else if dt != "Disk" {
-			return nil, nil  // probably an Image. TODO: other storage assets?
-		}
-		tp, err := asset.DiskType()
-		if err != nil {
-			return nil, err
-		}
-		mtd, err := getDiskType(db, tp, region)
-		if err != nil {
-			return nil, err
-		}
-		return &assets.ResourceMetadata{
-			Dt: mtd,
-		}, nil
-	default:
-		return nil, nil
-	}
-	return nil, nil
-}
-
 func AddResourceTypesToAssets(db *sql.DB, ax *assets.AssetStructure) error {
 	for _, inst := range ax.Instances {
 		mt, err := getMachineType(db, inst.MachineTypeName)
