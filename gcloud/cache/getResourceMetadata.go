@@ -57,10 +57,31 @@ func GetResourceMetadata(db *sql.DB, asset *assets.SmallAsset) (*assets.Resource
 	return nil, nil
 }
 
+func AddResourceTypesToAssets(db *sql.DB, ax *assets.AssetStructure) error {
+	for _, inst := range ax.Instances {
+		mt, err := getMachineType(db, inst.MachineTypeName)
+		if err != nil {
+			return err
+		}
+		inst.MachineType = mt
+	}
+	for _, dsk := range ax.Disks {
+		region := ""
+		if dsk.IsRegional {
+			region = dsk.ZoneOrRegion
+		}
+		dt, err := getDiskType(db, dsk.DiskTypeName, region)
+		if err != nil {
+			return err
+		}
+		dsk.DiskType = dt
+	}
+	return nil
+}
+
 func getMachineType(db *sql.DB, mt string) (assets.MachineType, error) {
 	queryMachineType := fmt.Sprintf(`SELECT CpuCount, MemoryMb, IsSharedCpu
 	FROM MachineTypes where MachineType='%s';`, mt)
-	fmt.Printf("mt query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return assets.MachineType{}, err
@@ -96,7 +117,6 @@ func getDiskType(db *sql.DB, dt string, region string) (assets.DiskType, error) 
 		queryDiskType = fmt.Sprintf(`SELECT DefaultSizeGb, Region 
 		FROM DiskTypes where DiskType='%s' and Region='%s';`, dt, region)
 	}
-	fmt.Printf("dt query: %s\n", queryDiskType)
 	res, err := db.Query(queryDiskType)
 	if err != nil {
 		return assets.DiskType{}, err

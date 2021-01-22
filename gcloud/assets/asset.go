@@ -25,11 +25,8 @@ func (a *SmallAsset) StorageSize() (int64, error) {
 	abytes, ok := a.ResourceMap["archiveSizeBytes"].(string)
 	if ok {
 		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
-		fmt.Printf("disk size parsed: %d\n", diskSize)
 		// The archive size gets reported as 4419062592 for a 4.12 GB image.
 		diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1000?
-		fmt.Printf("disk size adjusted to gb: %d\n", diskSize)
-		// should probably multiply this by number of storage locations?
 	} else {
 		gbytes, ok := a.ResourceMap["sizeGb"].(string)
 		if ok {

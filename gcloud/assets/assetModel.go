@@ -5,67 +5,165 @@ import (
 	"strings"
 )
 
-type Firewall struct {
-	a *SmallAsset
-	networkName string
-	Name string
+type ResourceUsage struct {
+	UsageUnit string // same unit as in PricingExpression
+	MaxUsage int64  // Min is 0 for inactive resources, max depends on things like num cpus
 }
 
-type Subnetwork struct {
-	a *SmallAsset
-	IpRange string
-	Region string
+type BaseAsset interface {
+	BillingService() string
+	ResourceFamily() string
+	Regions() []string
+	// Returns a map of resource (e.g. cpu, egress) to usage struct.
+	MaxResourceUsage() (map[string]ResourceUsage, error)
+}
+
+const BS_COMPUTE = "6F81-5844-456A"
+const BS_CONTAINER = "CCD8-9BF1-090E"
+const BS_MONITORING = "58CD-E7C3-72CA"
+const BS_TODO = "TODO"
+// TODO: others
+
+type Firewall struct {
 	Name string
 	networkName string
+}
+
+func (Firewall) ResourceFamily() string { return "Network" }
+func (Firewall) BillingService() string { return BS_COMPUTE }
+func (Firewall) Regions() []string { return nil }
+func (Firewall) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
+
+type Subnetwork struct {
+	Name string
+	IpRange string
+	Region string
+	networkName string
+}
+func (Subnetwork) ResourceFamily() string { return "Network" }
+func (Subnetwork) BillingService() string { return BS_COMPUTE }
+func (s Subnetwork) Regions() []string { return []string{s.Region} }
+func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	return map[string]ResourceUsage{
+		"egress": ResourceUsage{
+			UsageUnit: "gibibyte",
+			MaxUsage: -1, // is this unlimited?
+		},
+		"ingress": ResourceUsage{
+			UsageUnit: "gibitye",
+			MaxUsage: -1,
+		},
+	}, nil
 }
 
 type Route struct {
-	a *SmallAsset
 	IpRange string
 	networkName string
 }
+func (Route) ResourceFamily() string { return "Network" }
+func (Route) BillingService() string { return BS_COMPUTE }
+func (Route) Regions() []string { return nil }
+func (Route) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type Network struct {
-	a *SmallAsset
+	Name string
         Routes []Route
 	Subnetworks []Subnetwork
 	Firewalls []Firewall
-	NetworkName string
+}
+func (Network) ResourceFamily() string { return "Network" }
+func (Network) BillingService() string { return BS_COMPUTE }
+func (Network) Regions() []string { return nil }
+func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	return map[string]ResourceUsage{
+		"egress": ResourceUsage{
+			UsageUnit: "gibibyte",
+			MaxUsage: -1, // is this unlimited?
+		},
+		"ingress": ResourceUsage{
+			UsageUnit: "gibitye",
+			MaxUsage: -1,
+		},
+	}, nil
 }
 
 type ServiceAccountKey struct {
-	a *SmallAsset
 	serviceAccountName string
 }
+func (ServiceAccountKey) ResourceFamily() string { return "IAM" }
+func (ServiceAccountKey) BillingService() string { return BS_TODO }
+func (ServiceAccountKey) Regions() []string { return nil }
+func (ServiceAccountKey) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type ServiceAccount struct {
-	a *SmallAsset
-	ServiceAccountName string
+	Name string
         keys []ServiceAccountKey
 }
+func (ServiceAccount) ResourceFamily() string { return "IAM" }
+func (ServiceAccount) BillingService() string { return BS_TODO }
+func (ServiceAccount) Regions() []string { return nil }
+func (ServiceAccount) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type Service struct {
-	a *SmallAsset
 	Name string
 	State string
 }
+func (Service) ResourceFamily() string { return "Service" }
+func (Service) BillingService() string { return BS_TODO }
+func (Service) Regions() []string { return nil }
+func (Service) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	return map[string]ResourceUsage{
+		"calls": ResourceUsage{
+			UsageUnit: "count",
+			MaxUsage: -1,
+		},
+	}, nil
+}
 
 type Image struct {
-	a *SmallAsset
+	Name string
 	Licenses []string
 	sourceDiskName string
-	Name string
 	StorageSize int64
+	StorageLocations []string
+}
+func (Image) ResourceFamily() string { return "Storage" }
+func (Image) BillingService() string { return BS_COMPUTE }
+func (i Image) Regions() []string { return i.StorageLocations }
+func (i Image) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	return map[string]ResourceUsage{
+		"diskspace": ResourceUsage{
+			UsageUnit: "GiBy.mo",
+			MaxUsage: i.StorageSize,
+		},
+	}, nil
 }
 
 type Disk struct {
-	a *SmallAsset
-	DiskName string
+	Name string
 	IsRegional bool
 	ZoneOrRegion string
 	SourceImage *Image
 	Size int64
-	DiskType string
+	DiskTypeName string
+	DiskType DiskType
+}
+func (Disk) ResourceFamily() string { return "Storage" }
+func (Disk) BillingService() string { return BS_COMPUTE }
+func (d Disk) Regions() []string {
+	if d.IsRegional {
+		return []string{d.ZoneOrRegion}
+	} else {
+		return nil
+	}
+}
+func (d Disk) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	return map[string]ResourceUsage{
+		"diskspace": ResourceUsage{
+			UsageUnit: "GiBy.mo",
+			MaxUsage: d.Size,
+		},
+	}, nil
 }
 
 type Nic struct {
@@ -75,16 +173,43 @@ type Nic struct {
 }
 
 type Instance struct {
-	a *SmallAsset
+	Name string
 	// instances with the same zone, machine type and scheduling settings
 	// should have the same costs and can be combined for accounting.
 	// the fingerprint is a concatenation of zone, machine type and scheduling.
 	fingerprint string
 	Zone string
-	MachineType string
+	MachineTypeName string
+	MachineType MachineType
 	Scheduling string
 	Nics []Nic
-	Name string
+}
+func (Instance) ResourceFamily() string { return "Compute" }
+func (Instance) BillingService() string { return BS_COMPUTE }
+func (i Instance) Regions() []string {
+	if i.Zone != "" {
+		parts := strings.Split(i.Zone, "-")
+		return []string{fmt.Sprintf("%s-%s", parts[0], parts[1])}
+	}
+	return nil
+}
+func (i Instance) MaxResourceUsage() (map[string]ResourceUsage, error) {
+	if i.MachineType.CpuCount == 0 {
+		return nil, fmt.Errorf("Missing compute metadata for instance %+v\n", i)
+	}
+	cpuCount := i.MachineType.CpuCount
+	memoryGb := i.MachineType.MemoryMb / 1024
+	// TODO: gpus, shared cpu
+	return map[string]ResourceUsage{
+		"cpu": ResourceUsage{
+			UsageUnit: "h",
+			MaxUsage: 30 * 24 * cpuCount,
+		},
+		"memory": ResourceUsage{
+			UsageUnit: "GiBy.h",
+			MaxUsage: 30 * 24 * memoryGb,
+		},
+	}, nil
 }
 
 // This is basically a project.
@@ -135,13 +260,12 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 	fingerprint := fmt.Sprintf("%s:%s:%s", machineType, zone, scheduling)
 
 	inst := Instance{
-		a: &a,
+		Name: name,
 		Zone: zone,
-		MachineType: machineType,
+		MachineTypeName: machineType,
 		Scheduling: scheduling,
 		fingerprint: fingerprint,
 		Nics: nics,
-		Name: name,
 	}
 
 	as.Instances = append(as.Instances, &inst)
@@ -161,12 +285,11 @@ func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 	storageSize, _ := a.StorageSize()
 	diskType, _ := a.DiskType()
 	disk := Disk{
-		a: &a,
-		DiskName: diskName,
+		Name: diskName,
 		IsRegional: isRegional,
 		ZoneOrRegion: zoneOrRegion,
 		Size: storageSize,
-		DiskType: diskType,
+		DiskTypeName: diskType,
 	}
 	di := make([]Image, 0)
 	for _, img := range as.danglingImages {
@@ -198,16 +321,22 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 	}
 	idParts := strings.Split(a.Name, "/")
 	storageSize, _ := a.StorageSize()
+	regions := make([]string, 0)
+	storageLocations, _ := a.ResourceMap["storageLocations"].([]interface{})
+	for _, stl := range storageLocations {
+		loc, _ := stl.(string)
+		regions = append(regions, loc)
+	}
 	img := Image{
-		a: &a,
+		Name: idParts[len(idParts)-1],
 		Licenses: licenses,
 		sourceDiskName: sourceDiskName,
 		StorageSize: storageSize,
-		Name: idParts[len(idParts)-1],
+		StorageLocations: regions,
 	}
 	found := false
 	for _, d := range as.Disks {
-		if d.DiskName == sourceDiskName {
+		if d.Name == sourceDiskName {
 			d.SourceImage = &img
 			found = true
 			break
@@ -223,7 +352,6 @@ func (as *AssetStructure) buildService(a SmallAsset) error {
 	name, _ := a.ResourceMap["name"].(string)
 	state, _ := a.ResourceMap["state"].(string)
 	sv := Service{
-		a: &a,
 		Name: name,
 		State: state,
 	}
@@ -237,12 +365,11 @@ func (as *AssetStructure) buildServiceAccountKey(a SmallAsset) error {
 		return err
 	}
 	sa := ServiceAccountKey{
-		a: &a,
 		serviceAccountName: name,
 	}
 	found := false
 	for _, s := range as.ServiceAccounts {
-		if s.ServiceAccountName == name {
+		if s.Name == name {
 			s.keys = append(s.keys, sa)
 			found = true
 			break
@@ -260,8 +387,7 @@ func (as *AssetStructure) buildServiceAccount(a SmallAsset) error {
 		return err
 	}
 	sa := ServiceAccount{
-		a: &a,
-		ServiceAccountName: name,
+		Name: name,
 	}
 	dk := make([]ServiceAccountKey, 0)
 	for _, d := range as.danglingKeys {
@@ -280,8 +406,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 	parts := strings.Split(a.Name, "/")
 	networkName := parts[len(parts)-1]
 	n := Network {
-		a: &a,
-		NetworkName: networkName,
+		Name: networkName,
 	}
 	dr := make([]Route, 0)
 	for _, r := range as.danglingRoutes {
@@ -320,13 +445,12 @@ func (as *AssetStructure) buildFirewall(a SmallAsset) error {
 	networkName, _ := a.NetworkName()
 	name, _  := a.ResourceMap["name"].(string)
 	f := Firewall{
-		a: &a,
-		networkName: networkName,
 		Name: name,
+		networkName: networkName,
 	}
 	found := false
 	for _, n := range as.Networks {
-		if n.NetworkName == networkName {
+		if n.Name == networkName {
 			// TODO: avoid adding duplicates.
 			n.Firewalls = append(n.Firewalls, f)
 			found = true
@@ -343,14 +467,13 @@ func (as *AssetStructure) buildRoute(a SmallAsset) error {
 	ipRange, _ := a.ResourceMap["destRange"].(string)
 	networkName, _ := a.NetworkName()
 	r := Route{
-		a: &a,
 		IpRange: ipRange,
 		networkName: networkName,
 	}
 	// Do we already have the network?
 	found := false
 	for _, n := range as.Networks {
-		if n.NetworkName == networkName {
+		if n.Name == networkName {
 			// TODO: avoid adding duplicate routes.
 			n.Routes = append(n.Routes, r)
 			found = true
@@ -371,15 +494,14 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	region := parts[len(parts)-1]
 	network, _ := a.NetworkName()
         s := Subnetwork{
-		a: &a,
+		Name: name,
 		IpRange: ipRange,
 		Region: region,
-		Name: name,
 		networkName: network,
 	}
 	found := false
 	for _, n := range as.Networks {
-		if n.NetworkName == network {
+		if n.Name == network {
 			// TODO: avoid adding duplicates.
 			n.Subnetworks = append(n.Subnetworks, s)
 			found = true

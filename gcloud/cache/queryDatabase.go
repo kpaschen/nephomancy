@@ -9,107 +9,152 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Returns a map of sku id to pricing information.
-// Only the most recent pricing info will be used.
-func GetPricingInfo(db *sql.DB, asset *assets.SmallAsset) (map[string](PricingInfo), error) {
-	skus, err := getRelevantSkus(db, asset)
-	if err != nil {
-		return nil, err
-	}
-	if len(skus) == 0 {
-		// log.Printf("No skus found for asset %s\n", asset.Name)
-		return nil, nil
-	}
-	return getPricing(db, skus)
-}
-
-func getPricing(db *sql.DB, skus []string) (map[string](PricingInfo), error) {
+// returns a map of skuid to pricing info
+func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error) {
 	var queryPricingInfo string
 	ret := make(map[string](PricingInfo))
 	for _, skuId := range skus {
-		queryPricingInfo = fmt.Sprintf(`SELECT CurrencyConversionRate, PricingExpression,
-		AggregationInfo FROM PricingInfo where SkuId='%s';`, skuId)
+		queryPricingInfo = fmt.Sprintf(`SELECT p.CurrencyConversionRate,
+		p.AggregationInfo, p.UsageUnit, tr.CurrencyCode,
+		tr.Nanos, tr.Units, tr.StartUsageAmount FROM PricingInfo p JOIN 
+		TieredRates tr on p.SkuId=tr.SkuId where p.SkuId='%s';`, skuId)
 		res, err := db.Query(queryPricingInfo)
 		if err != nil {
 			return ret, err
 		}
 		defer res.Close()
 		var currencyConversionRate float32
-		var pricingExpression string
 		var aggregationInfo string
+		var usageUnit string
+		var currencyCode string
+		var nanos int64
+		var units int64
+		var startUsageAmount int64
+		var pi *PricingInfo
+		pi = nil
+		tieredRates := make([]Rate, 0)
 		for res.Next() {
-			err = res.Scan(&currencyConversionRate, &pricingExpression, &aggregationInfo)
+			err = res.Scan(&currencyConversionRate, &aggregationInfo,
+		&usageUnit, &currencyCode, &nanos, &units, &startUsageAmount)
 			if err != nil {
 				log.Printf("error scanning row: %v\n", err)
 				continue
 			}
+			if pi == nil {
+				pi = &PricingInfo{
+					CurrencyConversionRate: currencyConversionRate,
+					AggregationInfo: aggregationInfo,
+					PricingExpression: &Pricing{
+						UsageUnit: usageUnit,
+					},
+				}
 
-			pricing, err := FromJson(&pricingExpression)
-			if err != nil {
-				return ret, err
 			}
-			ret[skuId] = PricingInfo{
-				CurrencyConversionRate: currencyConversionRate,
-				PricingExpression: pricing,
-				AggregationInfo: aggregationInfo,
+			rate := Rate{
+				CurrencyCode: currencyCode,
+				Nanos: nanos,
+				StartUsageAmount: startUsageAmount,
+				Units: units,
 			}
-			break  // Expect only one result
+			tieredRates = append(tieredRates, rate)
+
+		}
+		if pi != nil {
+			pi.PricingExpression.TieredRates = tieredRates
+			ret[skuId] = *pi
 		}
 	}
 	return ret, nil
 }
 
-// This gets potentially relevant SKUs for an asset that has a resource.
-// Missing: Network resources
-// Also missing: looking at status of resources (currently treat all resources as active/ready)
-// Make sure this returns only SKUs that are relevant.
-func getRelevantSkus(db *sql.DB, asset *assets.SmallAsset) ([]string, error) {
-	service, err := asset.BillingService()
-	if err != nil {
-		return nil, err
+func getBeginningOfSkuQuery(querySku *strings.Builder, asset assets.BaseAsset) {
+	service := asset.BillingService()
+	if service == assets.BS_TODO {
+		return
 	}
-	if service == "" {
-		return nil, nil
-	}
-	resource, err := asset.ResourceFamily()
-	if err != nil {
-		return nil, err
-	}
+	resource := asset.ResourceFamily()
 	// TODO: network-related skus
 	if resource == "Network" {
-		return nil, nil
+		return
 	}
-	regions, err := asset.Regions()
-	if err != nil {
-		log.Printf("failed to get region for resource\n")
-		return nil, err
-	}
-
-	var querySku strings.Builder
-	fmt.Fprintf(&querySku, `SELECT Sku.SkuId
+	regions := asset.Regions()
+	fmt.Fprintf(querySku, `SELECT Sku.SkuId
 	FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
 	WHERE Sku.ServiceId='%s' AND Sku.ResourceFamily='%s'`, service, resource)
 	if regions != nil {
-		fmt.Fprintf(&querySku, " AND ServiceRegions.Region IN (")
+		fmt.Fprintf(querySku, " AND ServiceRegions.Region IN (")
 		rcount := len(regions)
 		for i, r := range regions {
 			if i == rcount - 1 {
-				fmt.Fprintf(&querySku, "'%s'", r)
+				fmt.Fprintf(querySku, "'%s'", r)
 			} else {
-				fmt.Fprintf(&querySku, "'%s',", r)
+				fmt.Fprintf(querySku, "'%s',", r)
 			}
 		}
-		fmt.Fprintf(&querySku, ") ")
+		fmt.Fprintf(querySku, ") ")
 	}
-	if err = completeQuery(&querySku, asset); err != nil {
-		return nil, err
+}
+
+func GetSkusForInstance(db *sql.DB, asset assets.Instance) ([]string, error) {
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, asset)
+	if asset.Scheduling != "" {
+		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", asset.Scheduling)
+	}
+	machineType := asset.MachineTypeName
+	// Now the machine type is something like 'n1-standard-2' but the ResourceGroup
+	// only uses part of that, so n1-standard-2 needs ResourceGroup N1Standard.
+	// TODO: not sure if this is always correct, maybe need to do a lookup table.
+	parts := strings.Split(machineType, "-")
+	if len(parts) != 3 {
+		log.Fatalf("Unexpected machine type format %s\n", machineType)
+	}
+	resourceGroup := fmt.Sprintf("%s%s", strings.Title(parts[0]), strings.Title(parts[1]))
+	if machineType != "" {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	}
 	fmt.Fprintf(&querySku, ";")
+	return getSkusForQuery(db, querySku.String())
+}
 
-	if err != nil {
-		return nil, err
+func GetSkusForDisk(db *sql.DB, asset assets.Disk) ([]string, error) {
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, asset)
+
+	// TODO: look for status "READY"
+	diskType := asset.DiskTypeName
+	resourceGroup := ""
+	switch diskType {
+	case "pd-standard":
+		resourceGroup = "PDStandard"
+	case "ssd":
+		resourceGroup = "SSD"
+	default:
+		log.Fatalf("Unknown disk type %s in completeDiskQuery\n", diskType)
 	}
-	res, err := db.Query(querySku.String())
+	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
+	// TODO the region query isn't quite right for all disk types.
+	if asset.IsRegional {
+		querySku.WriteString(" AND Sku.Description like 'Regional %' ")
+	} else {
+		querySku.WriteString(" AND Sku.Description like 'Storage %' AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
+	}
+	// TODO: create other disks and see which SKU they end up with.
+
+	fmt.Fprintf(&querySku, ";")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func GetSkusForImage(db *sql.DB, asset assets.Image) ([]string, error) {
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, asset)
+	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func getSkusForQuery(db *sql.DB, query string) ([]string, error) {
+	fmt.Printf("query: %s\n", query)
+	res, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -131,95 +176,5 @@ func getRelevantSkus(db *sql.DB, asset *assets.SmallAsset) ([]string, error) {
 		i++
 	}
 	return keys, nil
-}
-
-func completeInstanceQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
-	// TODO: look for status. TERMINATED does not get charged while SUSPENDED gets charged
-	// under D50B-484D-C2A2 which is regional to emea.
-	scheduling, err := asset.Scheduling()
-	if err != nil {
-		return err
-	}
-	if scheduling != "" {
-		fmt.Fprintf(queryBuilder, " AND Sku.UsageType='%s' ", scheduling)
-	}
-	machineType, err := asset.MachineType()
-	if err != nil {
-		return err
-	}
-	// Now the machine type is something like 'n1-standard-2' but the ResourceGroup
-	// only uses part of that, so n1-standard-2 needs ResourceGroup N1Standard.
-	// TODO: not sure if this is always correct, maybe need to do a lookup table.
-	parts := strings.Split(machineType, "-")
-	if len(parts) != 3 {
-		log.Fatalf("Unexpected machine type format %s\n", machineType)
-	}
-	resourceGroup := fmt.Sprintf("%s%s", strings.Title(parts[0]), strings.Title(parts[1]))
-	if machineType != "" {
-		fmt.Fprintf(queryBuilder, " AND Sku.ResourceGroup='%s' ", resourceGroup)
-	}
-	return nil
-}
-
-func completeImageQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
-	fmt.Fprintf(queryBuilder, " AND Sku.ResourceGroup='%s' ", "StorageImage")
-	return nil
-}
-
-func completeDiskQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
-	// TODO: look for status "READY"
-	diskType, err := asset.DiskType()
-	if err != nil {
-		return err
-	}
-	if diskType != "" {
-
-		resourceGroup := ""
-		switch diskType {
-		case "pd-standard":
-			resourceGroup = "PDStandard"
-		case "ssd":
-			resourceGroup = "SSD"
-		default:
-			return fmt.Errorf(
-				"Unknown disk type %s in completeDiskQuery\n",
-				diskType)
-		}
-		fmt.Fprintf(queryBuilder,
-		" AND Sku.ResourceGroup='%s' ", resourceGroup)
-		bt, err := asset.BaseType()
-		if err != nil {
-			return err
-		}
-		if bt == "RegionalDisk" {
-			queryBuilder.WriteString(
-				" AND Sku.Description like 'Regional %' ")
-		} else {
-			queryBuilder.WriteString(
-				" AND Sku.Description like 'Storage %' ")
-		}
-	}
-	// TODO: create other disks and see which SKU they end up with.
-	return nil
-}
-
-func completeQuery(queryBuilder *strings.Builder, asset *assets.SmallAsset) error {
-	at, err := asset.BaseType()
-	if err != nil {
-		return err
-	}
-	switch at {
-	case "Instance":
-		return completeInstanceQuery(queryBuilder, asset)
-	case "Image":
-		return completeImageQuery(queryBuilder, asset)
-	case "Disk":
-		return completeDiskQuery(queryBuilder, asset)
-	case "RegionDisk":
-		return completeDiskQuery(queryBuilder, asset)
-	default:
-		log.Printf("Not supporting asset types with resource family %s yet\n", at)
-		return nil
-	}
 }
 

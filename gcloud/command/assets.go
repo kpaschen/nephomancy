@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
+	"nephomancy/gcloud/cache"
 )
 
 type AssetsCommand struct {
@@ -22,6 +23,10 @@ func (*AssetsCommand) Help() string {
 	  --project=PROJECT  ID of a gcloud project. The user you are authenticating as must have
 	                     access to this project. The billing, compute, asset, and monitoring APIs
 			     must be enabled for this project.
+	  --workingdir=path  Optional: directory with cached sku and machine/disk type data.
+	                     The assets command needs this in order to resolve the machine
+			     type names contained in the assets and obtain the actual number
+			     of cpus and max amount of RAM. If not set, defaults to current directory. If you do not have a cache db yet, create one using nephomancy gcloud init.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -43,6 +48,12 @@ func (c *AssetsCommand) Run(args []string) int {
 
 	projectPath := fmt.Sprintf("projects/%s", project)
 
+	db, err := c.DbHandle()
+	if err != nil {
+		log.Fatalf("Could not open sku cache db: %v\n", err)
+	}
+	defer c.CloseDb()
+
 	ax, err := assets.ListAssetsForProject(projectPath)
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
@@ -50,6 +61,10 @@ func (c *AssetsCommand) Run(args []string) int {
 	assetStructure, err := assets.BuildAssetStructure(ax)
 	if err != nil {
 		log.Fatalf("Structuring assets failed: %v", err)
+	}
+	err = cache.AddResourceTypesToAssets(db, assetStructure)
+	if err != nil {
+		log.Fatalf("Could not add resource types: %v", err)
 	}
 	structureAsJsonBytes, err := json.MarshalIndent(*assetStructure, "", "  ")
 	if err != nil {
