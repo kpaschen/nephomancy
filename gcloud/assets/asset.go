@@ -3,8 +3,6 @@ package assets
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/url"
 	"strconv"
 	"strings"
 )
@@ -17,7 +15,7 @@ type SmallAsset struct {
 	resourceMap map[string]interface{}  // parsed version of ResourceAsJson
 }
 
-func (a *SmallAsset) StorageSize() (int64, error) {
+func (a *SmallAsset) storageSize() (int64, error) {
 	if err := a.ensureResourceMap(); err != nil {
                 return 0, err
         }
@@ -25,11 +23,8 @@ func (a *SmallAsset) StorageSize() (int64, error) {
 	abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
 	if ok {
 		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
-		fmt.Printf("disk size parsed: %d\n", diskSize)
 		// The archive size gets reported as 4419062592 for a 4.12 GB image.
 		diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1000?
-		fmt.Printf("disk size adjusted to gb: %d\n", diskSize)
-		// should probably multiply this by number of storage locations?
 	} else {
 		gbytes, ok := a.resourceMap["sizeGb"].(string)
 		if ok {
@@ -41,68 +36,12 @@ func (a *SmallAsset) StorageSize() (int64, error) {
 	return diskSize, nil
 }
 
-func (a *SmallAsset) BillingService() (string, error) {
-	parts := strings.Split(a.AssetType, "/")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("expected service/resource format for asset type but got %s\n", a.AssetType)
-	}
-
-	switch parts[0] {
-	case "compute.googleapis.com":
-		return "6F81-5844-456A", nil
-	case "container.googleapis.com":
-		return "CCD8-9BF1-090E", nil
-	case "monitoring.googleapis.com":
-		return "58CD-E7C3-72CA", nil
-	case "cloudresourcemanager.googleapis.com":
-		return "", nil  // This is the project resource, not sure what else?
-        case "iam.googleapis.com":
-		return "", nil  // ServiceAccountKey, ServiceAccount, what else?
-	case "serviceusage.googleapis.com":
-		return "", nil  // TODO: services, some of them get a charge
-	default:
-		log.Printf("No billing service configured for asset type %s, api %s?\n", a.AssetType, parts[0])
-		return "", nil
-	}
-	return "", fmt.Errorf("Reached part after switch statement unexpectedly.\n")
-}
-
 func (a *SmallAsset) BaseType() (string, error) {
 	parts := strings.Split(a.AssetType, "/")
 	if len(parts) != 2 {
 		return "", fmt.Errorf("expected service/resource format for asset type but got %s\n", a.AssetType)
 	}
 	return parts[1], nil
-}
-
-func (a *SmallAsset) ResourceFamily() (string, error) {
-	tp, err := a.BaseType()
-	if err != nil {
-		return "", err
-	}
-	switch tp {
-	case "Route":
-		return "Network", nil
-	case "Network":
-		return "Network", nil
-	case "Subnetwork":
-		return "Network", nil
-	case "Firewall":
-		return "Network", nil
-	case "Instance":
-		return "Compute", nil  // also return License here (and/or for image)
-	case "Image":
-		return "Storage", nil
-	case "Disk":
-		return "Storage", nil
-	case "RegionDisk":
-		return "Storage", nil
-	case "Project":
-		return "", nil
-	default:
-		log.Printf("No resource family known for %s\n", tp)
-		return "", nil
-	}
 }
 
 func (a *SmallAsset) ensureResourceMap() error {
@@ -120,7 +59,7 @@ func (a *SmallAsset) ensureResourceMap() error {
 	return nil
 }
 
-func (a *SmallAsset) Scheduling() (string, error) {
+func (a *SmallAsset) scheduling() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
@@ -141,7 +80,7 @@ func (a *SmallAsset) Scheduling() (string, error) {
 	return "", nil
 }
 
-func (a *SmallAsset) MachineType() (string, error) {
+func (a *SmallAsset) machineType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
@@ -153,15 +92,11 @@ func (a *SmallAsset) MachineType() (string, error) {
 	        return "", fmt.Errorf("expected machine type to be a string but it is a %T\n",
 		a.resourceMap["machineType"])
         }
-        u, err := url.Parse(machineType)
-        if err != nil {
-                return "", err
-        }
-        path := strings.Split(u.Path, "/")
+        path := strings.Split(machineType, "/")
 	return path[len(path)-1], nil
 }
 
-func (a *SmallAsset) DiskType() (string, error) {
+func (a *SmallAsset) diskType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
@@ -173,15 +108,23 @@ func (a *SmallAsset) DiskType() (string, error) {
 		return "", fmt.Errorf("Expected disk type to be a string but it is a %T\n",
 		a.resourceMap["type"])
 	}
-	u, err := url.Parse(diskType)
-	if err != nil {
-		return "", err
-	}
-	path := strings.Split(u.Path, "/")
+	path := strings.Split(diskType, "/")
 	return path[len(path)-1], nil
 }
 
-func (a *SmallAsset) Regions() ([]string, error) {
+func (a *SmallAsset) zone() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.resourceMap["zone"] == nil {
+		return "None", nil
+	}
+	zone, _ := a.resourceMap["zone"].(string)
+	path := strings.Split(zone, "/")
+	return path[len(path)-1], nil
+}
+
+func (a *SmallAsset) regions() ([]string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return nil, err
 	}
@@ -191,11 +134,7 @@ func (a *SmallAsset) Regions() ([]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.resourceMap["zone"])
 		}
-		u, err := url.Parse(zone)
-		if err != nil {
-			return nil, err
-		}
-		path := strings.Split(u.Path, "/")
+		path := strings.Split(zone, "/")
 		z := path[len(path)-1]
 		// Now z is of the form <continent>-<direction><integer>-<char> like
                 // europe-west1-b. The region we need is z without the trailing char, so
@@ -223,3 +162,41 @@ func (a *SmallAsset) Regions() ([]string, error) {
 	}
 	return regions, nil
 }
+
+func (a *SmallAsset) networkName() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.resourceMap["network"] == nil {
+		return "None", nil
+	}
+	nw, ok := a.resourceMap["network"].(string)
+	if !ok {
+		return "None", fmt.Errorf("network entry was a %T not a string\n",
+		a.resourceMap["network"])
+	}
+	parts := strings.Split(nw, "/")
+	return parts[len(parts)-1], nil
+}
+
+func (a *SmallAsset) serviceAccountName() (string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return "", err
+	}
+	if a.resourceMap["name"] == nil {
+		return "None", nil
+	}
+	n, ok := a.resourceMap["name"].(string)
+	if !ok {
+		return "None", fmt.Errorf("name was a %T not a string\n",
+		a.resourceMap["network"])
+	}
+	parts := strings.Split(n, "/")
+	// service account names have the form projects/<proj name>/serviceAccounts/<email>
+	// keys look like an account name with "keys/<some uuid>" appended
+	if len(parts) < 4 {
+		return "None", fmt.Errorf("unexpected name format for service account or key: %s\n", n)
+	}
+	return parts[3], nil
+}
+

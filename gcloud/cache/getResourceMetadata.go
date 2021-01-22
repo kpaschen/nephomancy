@@ -8,59 +8,31 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func GetResourceMetadata(db *sql.DB, asset *assets.SmallAsset) (*assets.ResourceMetadata, error) {
-	rf, _ := asset.ResourceFamily()
-	switch rf {
-	case "Compute":
-		mt, err := asset.MachineType()
+func AddResourceTypesToAssets(db *sql.DB, ax *assets.AssetStructure) error {
+	for _, inst := range ax.Instances {
+		mt, err := getMachineType(db, inst.MachineTypeName)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		mtd, err := getMachineType(db, mt)
-		if err != nil {
-			return nil, err
-		}
-		return &assets.ResourceMetadata{
-			Mt: mtd,
-		}, nil
-	case "Storage":
-		dt, err := asset.BaseType()
-		if err != nil {
-			return nil, err
-		}
-		region := ""
-		if dt == "RegionDisk" {
-			regions, err := asset.Regions()
-			if err != nil {
-				return nil, err
-			}
-			if len(regions) > 0 {
-				region = regions[0]
-			}
-		} else if dt != "Disk" {
-			return nil, nil  // probably an Image. TODO: other storage assets?
-		}
-		tp, err := asset.DiskType()
-		if err != nil {
-			return nil, err
-		}
-		mtd, err := getDiskType(db, tp, region)
-		if err != nil {
-			return nil, err
-		}
-		return &assets.ResourceMetadata{
-			Dt: mtd,
-		}, nil
-	default:
-		return nil, nil
+		inst.MachineType = mt
 	}
-	return nil, nil
+	for _, dsk := range ax.Disks {
+		region := ""
+		if dsk.IsRegional {
+			region = dsk.ZoneOrRegion
+		}
+		dt, err := getDiskType(db, dsk.DiskTypeName, region)
+		if err != nil {
+			return err
+		}
+		dsk.DiskType = dt
+	}
+	return nil
 }
 
 func getMachineType(db *sql.DB, mt string) (assets.MachineType, error) {
 	queryMachineType := fmt.Sprintf(`SELECT CpuCount, MemoryMb, IsSharedCpu
 	FROM MachineTypes where MachineType='%s';`, mt)
-	fmt.Printf("mt query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return assets.MachineType{}, err
@@ -96,7 +68,6 @@ func getDiskType(db *sql.DB, dt string, region string) (assets.DiskType, error) 
 		queryDiskType = fmt.Sprintf(`SELECT DefaultSizeGb, Region 
 		FROM DiskTypes where DiskType='%s' and Region='%s';`, dt, region)
 	}
-	fmt.Printf("dt query: %s\n", queryDiskType)
 	res, err := db.Query(queryDiskType)
 	if err != nil {
 		return assets.DiskType{}, err

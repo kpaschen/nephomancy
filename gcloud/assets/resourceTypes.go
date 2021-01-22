@@ -15,6 +15,7 @@ type MachineType struct {
 type DiskType struct {
 	Name string
 	Region string  // if this is set, it's a regional disk
+	// TODO: what about zone for zonal disks?
 	DefaultSizeGb int64
 }
 

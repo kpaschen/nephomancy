@@ -66,28 +66,21 @@ func (c *CostCommand) Run(args []string) int {
 
 	projectPath := fmt.Sprintf("projects/%s", project)
 
-	assets, err := assets.ListAssetsForProject(projectPath)
+	ax, err := assets.ListAssetsForProject(projectPath)
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
 	}
-	for _, a := range assets {
-		if a.AssetType == "" {
-			continue
-		}
-		prices, err := cache.GetPricingInfo(db, &a)
-		if err != nil {
-			log.Printf("Could not get prices for asset %+v: %v\n", a, err)
-			continue
-		}
-		if len(prices) == 0 {
-			log.Printf("Zero prices for asset %s\n", a.Name)
-			continue
-		}
-		err = pricing.CostRange(db, &a, prices)
-		if err != nil {
-			log.Fatalf("Failed to get price range: %v\n", err)
-		}
-		// fmt.Printf("Prices for asset %+v: %+v\n", a, prices)
+	proj, err := assets.BuildAssetStructure(ax)
+	if err != nil {
+		log.Fatalf("Building asset structure failed: %v", err)
+	}
+	err = cache.AddResourceTypesToAssets(db, proj)
+        if err != nil {
+                log.Fatalf("Could not add resource types: %v", err)
+        }
+	err = pricing.GetCost(db, *proj)
+	if err != nil {
+		log.Fatalf("Failed to get pricing information: %v", err)
 	}
 	return 0
 }
