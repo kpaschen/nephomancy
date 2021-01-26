@@ -111,7 +111,6 @@ func createResourceMetadataTables(db *sql.DB) error {
 	// per-zone. Need to check whether the same machine type name
 	// resolves to different cpu numbers etc depending on zone?
 
-	// TODO: add accelerators?
 	createMachineTypeTableSQL := `CREATE TABLE IF NOT EXISTS MachineTypes (
 		"MachineType" STRING NOT NULL PRIMARY KEY,
 		"CpuCount" INTEGER NOT NULL,
@@ -119,6 +118,22 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"IsSharedCpu" INTEGER  
 	);`
 	if err := createTable(db, &createMachineTypeTableSQL); err != nil {
+		return err
+	}
+
+	// This does not use Zone, assuming machine types have the same accelerator
+	// types regardless of zone. is that true?
+	createAcceleratorTypeTableSQL := `CREATE TABLE IF NOT EXISTS AcceleratorTypes (
+		"AcceleratorType" STRING NOT NULL,
+		"MachineType" STRING NOT NULL,
+		"AcceleratorCount" INTEGER NOT NULL,
+		PRIMARY KEY (MachineType, AcceleratorType)
+		FOREIGN KEY (MachineType)
+		REFERENCES MachineTypes (MachineType)
+		ON DELETE CASCADE
+		ON UPDATE NO ACTION
+	);`
+	if err := createTable(db, &createAcceleratorTypeTableSQL); err != nil {
 		return err
 	}
 

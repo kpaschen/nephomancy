@@ -63,11 +63,19 @@ func ListMachineTypes(project string, zone string) ([]MachineType, error) {
 			if t.IsSharedCpu {
 				shared = true
 			}
+			at := make([]AcceleratorType, len(t.Accelerators))
+			for id2, a := range t.Accelerators {
+				at[id2] = AcceleratorType{
+					Name: a.GuestAcceleratorType,
+					Count: a.GuestAcceleratorCount,
+				}
+			}
 			rt[idx] = MachineType{
 				CpuCount: t.GuestCpus,
 				IsSharedCpu: shared,
 				MemoryMb: t.MemoryMb,
 				Name: t.Name,
+				Accelerators: at,
 			}
 		}
 		ret = append(ret, rt...)

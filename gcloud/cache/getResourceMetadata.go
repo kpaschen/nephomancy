@@ -9,12 +9,14 @@ import (
 )
 
 func AddResourceTypesToAssets(db *sql.DB, ax *assets.AssetStructure) error {
-	for _, inst := range ax.Instances {
-		mt, err := getMachineType(db, inst.MachineTypeName)
-		if err != nil {
-			return err
+	for _, instList := range ax.Instances {
+		for _, inst := range instList {
+			mt, err := getMachineType(db, inst.MachineTypeName)
+			if err != nil {
+				return err
+			}
+			inst.MachineType = mt
 		}
-		inst.MachineType = mt
 	}
 	for _, dsk := range ax.Disks {
 		region := ""

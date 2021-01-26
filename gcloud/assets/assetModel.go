@@ -14,7 +14,8 @@ type BaseAsset interface {
 	BillingService() string
 	ResourceFamily() string
 	Regions() []string
-	// Returns a map of resource (e.g. cpu, egress) to usage struct.
+	// Returns a map of resource (e.g. cpu, memory, disk) to usage struct.
+	// network ingress/egress is handled separately.
 	MaxResourceUsage() (map[string]ResourceUsage, error)
 }
 
@@ -39,23 +40,15 @@ type Subnetwork struct {
 	IpRange string
 	Region string
 	networkName string
-	MaxTier string
 }
 func (Subnetwork) ResourceFamily() string { return "Network" }
 func (Subnetwork) BillingService() string { return BS_COMPUTE }
 func (s Subnetwork) Regions() []string { return []string{s.Region} }
-func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) {
-	return map[string]ResourceUsage{
-		"egress": ResourceUsage{
-			UsageUnit: "GiBy",
-			MaxUsage: -1, // is this unlimited?
-		},
-		"ingress": ResourceUsage{
-			UsageUnit: "GiBy",
-			MaxUsage: -1,
-		},
-	}, nil
-}
+// network resource usage is handled separately because of the distinction between
+// ingress and external/internal egress pricing.
+// usually, max bandwidth depends on number of cpus and machine type as well, so the max
+// usage is not tied to the network, it depends on the vm.
+func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type Route struct {
 	IpRange string
@@ -77,6 +70,9 @@ func (Network) BillingService() string { return BS_COMPUTE }
 func (Network) Regions() []string { return nil }
 func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	return map[string]ResourceUsage{
+		// Ingress and egress are typically handled by different SKUs.
+		// The Network resource here handles only external traffic, all internal
+		// traffic is on the Subnetwork resources.
 		"egress": ResourceUsage{
 			UsageUnit: "GiBy",
 			MaxUsage: -1, // is this unlimited?
@@ -176,15 +172,14 @@ type Nic struct {
 
 type Instance struct {
 	Name string
-	// instances with the same zone, machine type and scheduling settings
-	// should have the same costs and can be combined for accounting.
-	// the fingerprint is a concatenation of zone, machine type and scheduling.
-	fingerprint string
 	Zone string
 	MachineTypeName string
 	MachineType MachineType
 	Scheduling string
 	Nics []Nic
+}
+func (i Instance) Fingerprint() string {
+	return fmt.Sprintf("%s:%s:%s", i.Zone, i.MachineTypeName, i.Scheduling)
 }
 func (Instance) ResourceFamily() string { return "Compute" }
 func (Instance) BillingService() string { return BS_COMPUTE }
@@ -214,9 +209,11 @@ func (i Instance) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	}, nil
 }
 
+type InstanceMap map[string]([]*Instance)
+
 // This is basically a project.
 type AssetStructure struct {
-	Instances []*Instance
+	Instances InstanceMap
 	// Assume all subnetworks, routes, firewalls etc. belong to a network.
 	// But not all networks are used by an instance necessarily.
 	Networks []*Network
@@ -270,18 +267,25 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 	zone, _ := a.zone()
 	machineType, _ := a.machineType()
 	scheduling, _ := a.scheduling()
-	fingerprint := fmt.Sprintf("%s:%s:%s", machineType, zone, scheduling)
 
 	inst := Instance{
 		Name: name,
 		Zone: zone,
 		MachineTypeName: machineType,
 		Scheduling: scheduling,
-		fingerprint: fingerprint,
 		Nics: nics,
 	}
 
-	as.Instances = append(as.Instances, &inst)
+	fp := inst.Fingerprint()
+	if as.Instances == nil {
+		as.Instances = make(map[string]([]*Instance))
+	}
+
+	if as.Instances[fp] == nil {
+		as.Instances[fp] = []*Instance{&inst}
+	} else {
+		as.Instances[fp] = append(as.Instances[fp], &inst)
+	}
         return nil
 }
 
@@ -537,6 +541,39 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	return nil
 }
 
+func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error) {
+	if as.Instances == nil {
+		return nil, fmt.Errorf("instance map for this project has not been initialized\n")
+	}
+	ret := make(map[string]int32)
+	for _, instList := range as.Instances {
+		for _, instance := range instList {
+			region := ""
+			regions := instance.Regions()
+			if len(regions) > 0 {  // there should be exactly one region
+				region = regions[0]
+			}
+			mt := instance.MachineTypeName
+			effectiveTier := ""
+			for _, nic := range instance.Nics {
+				tier := nic.NetworkTier
+				if effectiveTier != "PREMIUM" {
+					effectiveTier = tier
+				}
+				if effectiveTier == "PREMIUM" {
+					break
+				}
+			}
+			if effectiveTier == "" {
+				effectiveTier = as.DefaultNetworkTier
+			}
+			key := fmt.Sprintf("%s:%s:%s", mt, region, effectiveTier)
+			ret[key]++
+		}
+	}
+	return ret, nil
+}
+
 func (as *AssetStructure) reconcile() error {
 	if len(as.danglingRoutes) > 0 {
 		return fmt.Errorf("orphaned routes: %+v\n", as.danglingRoutes)
@@ -549,38 +586,6 @@ func (as *AssetStructure) reconcile() error {
 	}
 	if len(as.danglingImages) > 0 {
 		return fmt.Errorf("orphaned Images: %+v\n", as.danglingImages)
-	}
-
-	// See which subnetworks are in use by which instances, and record the maximum
-	// network tier applicable per subnetwork.
-	tier := as.DefaultNetworkTier
-	for _, inst := range as.Instances {
-		for _, nic := range inst.Nics {
-			nwName := nic.NetworkName
-			sName := nic.SubnetworkName
-			found := false
-			if nic.NetworkTier != "" {
-				tier = nic.NetworkTier
-			}
-			for _, nw := range as.Networks {
-				if nw.Name != nwName {
-					continue
-				}
-				for _, sw := range nw.Subnetworks {
-					if sw.Name != sName {
-						continue
-					}
-					found = true
-					// There are only two tiers, PREMIUM and STANDARD
-					if sw.MaxTier != "PREMIUM" {
-						sw.MaxTier = tier
-					}
-				}
-			}
-			if !found {
-				return fmt.Errorf("Instance %+v refers to non-existent network/subnetwork %s/%s\n", inst, nwName, sName)
-			}
-		}
 	}
 	return nil
 }
