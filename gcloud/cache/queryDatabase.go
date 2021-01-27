@@ -73,10 +73,6 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, asset assets.BaseAsset) {
 		return
 	}
 	resource := asset.ResourceFamily()
-	// TODO: network-related skus
-	if resource == "Network" {
-		return
-	}
 	regions := asset.Regions()
 	fmt.Fprintf(querySku, `SELECT Sku.SkuId
 	FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
@@ -149,6 +145,95 @@ func GetSkusForImage(db *sql.DB, asset assets.Image) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, asset)
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
+	return getSkusForQuery(db, querySku.String())
+}
+
+// For most network pricing, the region is not relevant, it is enough to
+// look at the high-level geographic area, like EMEA.
+func getGlobalRegions() []string {
+	return []string{"APAC", "EMEA", "Americas"}
+}
+
+func GetSkusForIngress(db *sql.DB, region string, networkTier string) ([]string, error) {
+	var querySku strings.Builder
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
+	WHERE Sku.ResourceFamily='Network'`)
+	if region != "" {
+		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
+	}
+	// There are other types of ingress (e.g. GoogleIngress), but this should give an ok
+	// upper bound for costs.
+	if networkTier == "PREMIUM" {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetIngress' ")
+	} else {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetIngress' ")
+	}
+	for idx, area := range getGlobalRegions() {
+		if idx == 0 {
+			querySku.WriteString(" AND (Sku.Description like '% from ")
+			querySku.WriteString(area)
+			querySku.WriteString(" to %'")
+		} else {
+			querySku.WriteString(" OR Sku.Description like '% from ")
+			querySku.WriteString(area)
+			querySku.WriteString(" to %'")
+		}
+	}
+	fmt.Fprintf(&querySku, ");")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func GetSkusForExternalEgress(db *sql.DB, region string, networkTier string) ([]string, error) {
+	var querySku strings.Builder
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
+	WHERE Sku.ResourceFamily='Network'`)
+	if region != "" {
+		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
+	}
+	// There are other types of egress ...
+	if networkTier == "PREMIUM" {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
+	} else {
+		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetEgress' ")
+	}
+	for idx, area := range getGlobalRegions() {
+		if idx == 0 {
+			querySku.WriteString(" AND (Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		} else {
+			querySku.WriteString(" OR Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		}
+	}
+	fmt.Fprintf(&querySku, ");")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func GetSkusForInternalEgress(db *sql.DB, region string) ([]string, error) {
+	var querySku strings.Builder
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
+	WHERE Sku.ResourceFamily='Network'`)
+	if region != "" {
+		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
+	}
+	// There are other types of internal egress. VPN is usually less expensive
+	// than the other types. Not handling Intrazone (it's free atm) or InterzoneEgress
+	// because InterregionEgress should be an upper bound for both.
+	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='InterregionEgress' ")
+	for idx, area := range getGlobalRegions() {
+		if idx == 0 {
+			querySku.WriteString(" AND (Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		} else {
+			querySku.WriteString(" OR Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		}
+	}
+	fmt.Fprintf(&querySku, ");")
 	return getSkusForQuery(db, querySku.String())
 }
 

@@ -149,12 +149,19 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 	insertMachineTypeByZone := `
 	REPLACE INTO MachineTypesByZone(Zone, MachineType)
 	VALUES (?,?);`
+	insertAcceleratorTypes := `REPLACE INTO AcceleratorTypes(
+		AcceleratorType, MachineType, AcceleratorCount)
+		VALUES (?,?,?)`;
 
 	statement, err = db.Prepare(insertMachineType)
 	if err != nil {
 		return err
 	}
 	statement2, err := db.Prepare(insertMachineTypeByZone)
+	if err != nil {
+		return err
+	}
+	statement3, err := db.Prepare(insertAcceleratorTypes)
 	if err != nil {
 		return err
 	}
@@ -174,6 +181,12 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 			_, err = statement2.Exec(zone, mt.Name)
 			if err != nil {
 				return err
+			}
+			for _, at := range mt.Accelerators {
+				_, err = statement3.Exec(at.Name, mt.Name, at.Count)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

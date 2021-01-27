@@ -23,6 +23,10 @@ func main() {
 			return &gcmds.AssetsCommand{
 			}, nil
 		},
+		"gcloud services": func() (cli.Command, error) {
+			return &gcmds.ServicesCommand{
+			}, nil
+		},
 	}
 
 	exitStatus, err := c.Run()

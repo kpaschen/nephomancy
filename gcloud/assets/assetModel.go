@@ -14,7 +14,8 @@ type BaseAsset interface {
 	BillingService() string
 	ResourceFamily() string
 	Regions() []string
-	// Returns a map of resource (e.g. cpu, egress) to usage struct.
+	// Returns a map of resource (e.g. cpu, memory, disk) to usage struct.
+	// network ingress/egress is handled separately.
 	MaxResourceUsage() (map[string]ResourceUsage, error)
 }
 
@@ -43,18 +44,11 @@ type Subnetwork struct {
 func (Subnetwork) ResourceFamily() string { return "Network" }
 func (Subnetwork) BillingService() string { return BS_COMPUTE }
 func (s Subnetwork) Regions() []string { return []string{s.Region} }
-func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) {
-	return map[string]ResourceUsage{
-		"egress": ResourceUsage{
-			UsageUnit: "gibibyte",
-			MaxUsage: -1, // is this unlimited?
-		},
-		"ingress": ResourceUsage{
-			UsageUnit: "gibitye",
-			MaxUsage: -1,
-		},
-	}, nil
-}
+// network resource usage is handled separately because of the distinction between
+// ingress and external/internal egress pricing.
+// usually, max bandwidth depends on number of cpus and machine type as well, so the max
+// usage is not tied to the network, it depends on the vm.
+func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type Route struct {
 	IpRange string
@@ -68,7 +62,7 @@ func (Route) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, 
 type Network struct {
 	Name string
         Routes []Route
-	Subnetworks []Subnetwork
+	Subnetworks []*Subnetwork
 	Firewalls []Firewall
 }
 func (Network) ResourceFamily() string { return "Network" }
@@ -76,12 +70,15 @@ func (Network) BillingService() string { return BS_COMPUTE }
 func (Network) Regions() []string { return nil }
 func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	return map[string]ResourceUsage{
+		// Ingress and egress are typically handled by different SKUs.
+		// The Network resource here handles only external traffic, all internal
+		// traffic is on the Subnetwork resources.
 		"egress": ResourceUsage{
-			UsageUnit: "gibibyte",
+			UsageUnit: "GiBy",
 			MaxUsage: -1, // is this unlimited?
 		},
 		"ingress": ResourceUsage{
-			UsageUnit: "gibitye",
+			UsageUnit: "GiBy",
 			MaxUsage: -1,
 		},
 	}, nil
@@ -170,19 +167,19 @@ type Nic struct {
 	Name string
 	NetworkName string
 	SubnetworkName string
+	NetworkTier string
 }
 
 type Instance struct {
 	Name string
-	// instances with the same zone, machine type and scheduling settings
-	// should have the same costs and can be combined for accounting.
-	// the fingerprint is a concatenation of zone, machine type and scheduling.
-	fingerprint string
 	Zone string
 	MachineTypeName string
 	MachineType MachineType
 	Scheduling string
 	Nics []Nic
+}
+func (i Instance) Fingerprint() string {
+	return fmt.Sprintf("%s:%s:%s", i.Zone, i.MachineTypeName, i.Scheduling)
 }
 func (Instance) ResourceFamily() string { return "Compute" }
 func (Instance) BillingService() string { return BS_COMPUTE }
@@ -212,9 +209,11 @@ func (i Instance) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	}, nil
 }
 
+type InstanceMap map[string]([]*Instance)
+
 // This is basically a project.
 type AssetStructure struct {
-	Instances []*Instance
+	Instances InstanceMap
 	// Assume all subnetworks, routes, firewalls etc. belong to a network.
 	// But not all networks are used by an instance necessarily.
 	Networks []*Network
@@ -223,6 +222,7 @@ type AssetStructure struct {
 	Disks []*Disk
 	ServiceAccounts []*ServiceAccount
 	Services []*Service
+	DefaultNetworkTier string
 
 	danglingRoutes []Route
 	danglingSubnetworks []Subnetwork
@@ -246,10 +246,20 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 			x, _ = networkInterface["subnetwork"].(string)
 			parts = strings.Split(x, "/")
 			subnetworkName := parts[len(parts)-1]
+			ac, _ := networkInterface["accessConfigs"].([]interface{})
+			tier := ""  // if not set, the project's default tier will take effect.
+			// Currently, there is only at most one config, and the type is always
+			// ONE_TO_ONE_NAT. When there is no config, the instance has no
+			// access to the internet.
+			for _, config := range ac {
+				cfg := config.(map[string]interface{})
+				tier, _ = cfg["networkTier"].(string)
+			}
 			nic := Nic {
 				Name: nicName,
 				NetworkName: networkName,
 				SubnetworkName: subnetworkName,
+				NetworkTier: tier,
 			}
 			nics = append(nics, nic)
 		}
@@ -257,18 +267,25 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 	zone, _ := a.zone()
 	machineType, _ := a.machineType()
 	scheduling, _ := a.scheduling()
-	fingerprint := fmt.Sprintf("%s:%s:%s", machineType, zone, scheduling)
 
 	inst := Instance{
 		Name: name,
 		Zone: zone,
 		MachineTypeName: machineType,
 		Scheduling: scheduling,
-		fingerprint: fingerprint,
 		Nics: nics,
 	}
 
-	as.Instances = append(as.Instances, &inst)
+	fp := inst.Fingerprint()
+	if as.Instances == nil {
+		as.Instances = make(map[string]([]*Instance))
+	}
+
+	if as.Instances[fp] == nil {
+		as.Instances[fp] = []*Instance{&inst}
+	} else {
+		as.Instances[fp] = append(as.Instances[fp], &inst)
+	}
         return nil
 }
 
@@ -348,6 +365,16 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 	return nil
 }
 
+// only interested in the default network tier for now
+func (as *AssetStructure) buildProject(a SmallAsset) error {
+	as.DefaultNetworkTier = "PREMIUM"
+	if a.resourceMap["defaultNetworkTier"] != nil {
+		tier, _ := a.resourceMap["defaultNetworkTier"].(string)
+		as.DefaultNetworkTier = tier
+	}
+	return nil
+}
+
 func (as *AssetStructure) buildService(a SmallAsset) error {
 	name, _ := a.resourceMap["name"].(string)
 	state, _ := a.resourceMap["state"].(string)
@@ -423,7 +450,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 		if s.networkName != networkName {
 			ds = append(ds, s)
 		} else {
-			n.Subnetworks = append(n.Subnetworks, s)
+			n.Subnetworks = append(n.Subnetworks, &s)
 		}
 	}
 	as.danglingSubnetworks = ds
@@ -503,13 +530,62 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	for _, n := range as.Networks {
 		if n.Name == network {
 			// TODO: avoid adding duplicates.
-			n.Subnetworks = append(n.Subnetworks, s)
+			n.Subnetworks = append(n.Subnetworks, &s)
 			found = true
 			break
 		}
 	}
 	if !found {
 		as.danglingSubnetworks = append(as.danglingSubnetworks, s)
+	}
+	return nil
+}
+
+func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error) {
+	if as.Instances == nil {
+		return nil, fmt.Errorf("instance map for this project has not been initialized\n")
+	}
+	ret := make(map[string]int32)
+	for _, instList := range as.Instances {
+		for _, instance := range instList {
+			region := ""
+			regions := instance.Regions()
+			if len(regions) > 0 {  // there should be exactly one region
+				region = regions[0]
+			}
+			mt := instance.MachineTypeName
+			effectiveTier := ""
+			for _, nic := range instance.Nics {
+				tier := nic.NetworkTier
+				if effectiveTier != "PREMIUM" {
+					effectiveTier = tier
+				}
+				if effectiveTier == "PREMIUM" {
+					break
+				}
+			}
+			if effectiveTier == "" {
+				effectiveTier = as.DefaultNetworkTier
+			}
+			key := fmt.Sprintf("%s:%s:%s", mt, region, effectiveTier)
+			ret[key]++
+		}
+	}
+	return ret, nil
+}
+
+func (as *AssetStructure) reconcile() error {
+	if len(as.danglingRoutes) > 0 {
+		return fmt.Errorf("orphaned routes: %+v\n", as.danglingRoutes)
+	}
+	if len(as.danglingSubnetworks) > 0 {
+		return fmt.Errorf("orphaned Subnetworks: %+v\n", as.danglingSubnetworks)
+	}
+	if len(as.danglingFirewalls) > 0 {
+		return fmt.Errorf("orphaned Firewalls: %+v\n", as.danglingFirewalls)
+	}
+	if len(as.danglingImages) > 0 {
+		return fmt.Errorf("orphaned Images: %+v\n", as.danglingImages)
 	}
 	return nil
 }
@@ -547,7 +623,9 @@ func BuildAssetStructure(ax []SmallAsset) (*AssetStructure, error) {
 		case "Service": if err = ret.buildService(as); err != nil {
 			return nil, err
 		}
-		case "Project": continue
+		case "Project": if err = ret.buildProject(as); err != nil {
+			return nil, err
+		}
 		case "Disk": if err = ret.buildDisk(as, false); err != nil {
 			return nil, err
 		}
@@ -563,6 +641,9 @@ func BuildAssetStructure(ax []SmallAsset) (*AssetStructure, error) {
 	        default: fmt.Printf("not handling type %s yet\n", bt)
 		continue
 		}
+	}
+	if err := ret.reconcile(); err != nil {
+		return nil, err
 	}
 	return &ret, nil
 }

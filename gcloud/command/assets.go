@@ -54,6 +54,11 @@ func (c *AssetsCommand) Run(args []string) int {
 	}
 	defer c.CloseDb()
 
+	err = assets.GetProject(project)
+	if err != nil {
+		log.Fatalf("Failed to get project: %v", err)
+	}
+
 	ax, err := assets.ListAssetsForProject(projectPath)
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
