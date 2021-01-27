@@ -68,21 +68,8 @@ type Network struct {
 func (Network) ResourceFamily() string { return "Network" }
 func (Network) BillingService() string { return BS_COMPUTE }
 func (Network) Regions() []string { return nil }
-func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) {
-	return map[string]ResourceUsage{
-		// Ingress and egress are typically handled by different SKUs.
-		// The Network resource here handles only external traffic, all internal
-		// traffic is on the Subnetwork resources.
-		"egress": ResourceUsage{
-			UsageUnit: "GiBy",
-			MaxUsage: -1, // is this unlimited?
-		},
-		"ingress": ResourceUsage{
-			UsageUnit: "GiBy",
-			MaxUsage: -1,
-		},
-	}, nil
-}
+// network resource usage is handled by vms (egress) and load balancers (ingress).
+func (Network) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type ServiceAccountKey struct {
 	serviceAccountName string
@@ -176,7 +163,7 @@ type Instance struct {
 	MachineTypeName string
 	MachineType MachineType
 	Scheduling string
-	Nics []Nic
+	nics []Nic
 }
 func (i Instance) Fingerprint() string {
 	return fmt.Sprintf("%s:%s:%s", i.Zone, i.MachineTypeName, i.Scheduling)
@@ -216,13 +203,13 @@ type AssetStructure struct {
 	Instances InstanceMap
 	// Assume all subnetworks, routes, firewalls etc. belong to a network.
 	// But not all networks are used by an instance necessarily.
-	Networks []*Network
+	networks []*Network
 	// Assume all images and licenses belong to a disk. But not all disks belong
 	// to an instance, hence they have their own top level entry.
 	Disks []*Disk
-	ServiceAccounts []*ServiceAccount
-	Services []*Service
-	DefaultNetworkTier string
+	serviceAccounts []*ServiceAccount
+	services []*Service
+	defaultNetworkTier string
 
 	danglingRoutes []Route
 	danglingSubnetworks []Subnetwork
@@ -273,7 +260,7 @@ func (as *AssetStructure) buildInstance(a SmallAsset) error {
 		Zone: zone,
 		MachineTypeName: machineType,
 		Scheduling: scheduling,
-		Nics: nics,
+		nics: nics,
 	}
 
 	fp := inst.Fingerprint()
@@ -367,10 +354,10 @@ func (as *AssetStructure) buildImage(a SmallAsset) error {
 
 // only interested in the default network tier for now
 func (as *AssetStructure) buildProject(a SmallAsset) error {
-	as.DefaultNetworkTier = "PREMIUM"
+	as.defaultNetworkTier = "PREMIUM"
 	if a.resourceMap["defaultNetworkTier"] != nil {
 		tier, _ := a.resourceMap["defaultNetworkTier"].(string)
-		as.DefaultNetworkTier = tier
+		as.defaultNetworkTier = tier
 	}
 	return nil
 }
@@ -382,7 +369,7 @@ func (as *AssetStructure) buildService(a SmallAsset) error {
 		Name: name,
 		State: state,
 	}
-	as.Services = append(as.Services, &sv)
+	as.services = append(as.services, &sv)
 	return nil
 }
 
@@ -395,7 +382,7 @@ func (as *AssetStructure) buildServiceAccountKey(a SmallAsset) error {
 		serviceAccountName: name,
 	}
 	found := false
-	for _, s := range as.ServiceAccounts {
+	for _, s := range as.serviceAccounts {
 		if s.Name == name {
 			s.keys = append(s.keys, sa)
 			found = true
@@ -425,7 +412,7 @@ func (as *AssetStructure) buildServiceAccount(a SmallAsset) error {
 		}
 	}
 	as.danglingKeys = dk
-	as.ServiceAccounts = append(as.ServiceAccounts, &sa)
+	as.serviceAccounts = append(as.serviceAccounts, &sa)
 	return nil
 }
 
@@ -464,7 +451,7 @@ func (as *AssetStructure) buildNetwork(a SmallAsset) error {
 		}
 	}
 	as.danglingFirewalls = df
-	as.Networks = append(as.Networks, &n)
+	as.networks = append(as.networks, &n)
 	return nil
 }
 
@@ -476,7 +463,7 @@ func (as *AssetStructure) buildFirewall(a SmallAsset) error {
 		networkName: networkName,
 	}
 	found := false
-	for _, n := range as.Networks {
+	for _, n := range as.networks {
 		if n.Name == networkName {
 			// TODO: avoid adding duplicates.
 			n.Firewalls = append(n.Firewalls, f)
@@ -499,7 +486,7 @@ func (as *AssetStructure) buildRoute(a SmallAsset) error {
 	}
 	// Do we already have the network?
 	found := false
-	for _, n := range as.Networks {
+	for _, n := range as.networks {
 		if n.Name == networkName {
 			// TODO: avoid adding duplicate routes.
 			n.Routes = append(n.Routes, r)
@@ -527,7 +514,7 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 		networkName: network,
 	}
 	found := false
-	for _, n := range as.Networks {
+	for _, n := range as.networks {
 		if n.Name == network {
 			// TODO: avoid adding duplicates.
 			n.Subnetworks = append(n.Subnetworks, &s)
@@ -555,7 +542,7 @@ func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error
 			}
 			mt := instance.MachineTypeName
 			effectiveTier := ""
-			for _, nic := range instance.Nics {
+			for _, nic := range instance.nics {
 				tier := nic.NetworkTier
 				if effectiveTier != "PREMIUM" {
 					effectiveTier = tier
@@ -565,7 +552,7 @@ func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error
 				}
 			}
 			if effectiveTier == "" {
-				effectiveTier = as.DefaultNetworkTier
+				effectiveTier = as.defaultNetworkTier
 			}
 			key := fmt.Sprintf("%s:%s:%s", mt, region, effectiveTier)
 			ret[key]++

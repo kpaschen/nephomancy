@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package model;
+option go_package = ".;resources";
+
+message MachineType {
+  uint32 cpu_count = 1;
+  uint32 memory_gb = 2;
+  uint32 gpu_count = 3;
+  // needs an enum or so for scheduling properties?
+}
+
+message DiskType {
+  uint32 size_gb = 1;
+  // need an enum or a flag for whether this is replicated.
+}
+
+message Image {
+  uint32 size_gb = 1;
+}
+
+message VM {
+  string zone = 1;
+  string region = 2;
+  MachineType type = 3;
+}
+
+message Disk {
+  string zone = 1;
+  string region = 2;
+  DiskType type = 3; 
+}
+
+message Subnetwork {
+  string region = 1;
+  uint64 max_ingress_gbits_per_second = 2;
+  uint64 max_external_egress_gbits_per_second = 3;
+  uint64 max_internal_egress_gbits_per_second = 4;
+}
+
+message Network {
+  repeated Subnetwork subnetworks = 1;
+  // there are types of network (e.g. vpn), but the names and the implications
+  // for billing vary by cloud provider.
+}
+
+message Project {
+  repeated VM vms = 1;
+  repeated Disk disks = 2;
+  repeated Image images = 3;
+}
