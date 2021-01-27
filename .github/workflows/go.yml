@@ -17,7 +17,20 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: ^1.15
-
+    
+    - name: Build protobuf library
+      run: |
+        git clone https://github.com/protocolbuffers/protobuf.git
+        cd protobuf
+        git submodule update --init --recursive
+        ./autogen.sh
+        ./autogen.sh
+        ./configure
+        make
+        make check
+        sudo make install
+        sudo ldconfig
+        
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
@@ -28,6 +41,9 @@ jobs:
             curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
             dep ensure
         fi
+        
+    - name: Run Protoc
+      run: protoc -I common/proto --go_out=common/resources common/proto/model.proto
 
     - name: Build
       run: go build -v ./...
