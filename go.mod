@@ -7,6 +7,9 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/mattn/go-sqlite3 v1.14.6
 	github.com/mitchellh/cli v1.1.2
+	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
+	golang.org/x/tools v0.1.0 // indirect
 	google.golang.org/api v0.36.0
 	google.golang.org/genproto v0.0.0-20201201144952-b05cb90ed32e
+	google.golang.org/protobuf v1.25.0
 )

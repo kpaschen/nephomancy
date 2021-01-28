@@ -26,7 +26,7 @@ func populateBillingServices(db *sql.DB) error {
 	}
 	for _, b := range bServices {
 		now := time.Now().Unix()
-		_, err = statement.Exec(b.ServiceId, b.DisplayName, now)
+		_, err = statement.Exec(b.ServiceID, b.DisplayName, now)
 		if err != nil {
 			return err
 		}

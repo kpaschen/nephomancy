@@ -30,7 +30,7 @@ func (a *SmallAsset) storageSize() (int64, error) {
 		if ok {
 			diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
 		} else {
-			return 0, fmt.Errorf("Unable to determine storage size for asset %+v\n", a)
+			return 0, fmt.Errorf("unable to determine storage size for asset %+v", a)
 		}
 	}
 	return diskSize, nil
@@ -39,7 +39,7 @@ func (a *SmallAsset) storageSize() (int64, error) {
 func (a *SmallAsset) BaseType() (string, error) {
 	parts := strings.Split(a.AssetType, "/")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("expected service/resource format for asset type but got %s\n", a.AssetType)
+		return "", fmt.Errorf("expected service/resource format for asset type but got %s", a.AssetType)
 	}
 	return parts[1], nil
 }
@@ -51,7 +51,7 @@ func (a *SmallAsset) ensureResourceMap() error {
 		json.Unmarshal(rBytes, &rm)
 		theMap, ok := rm["data"].(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("expected resource[data] to be another map but it is a %T\n",
+			return fmt.Errorf("expected resource[data] to be another map but it is a %T",
 			rm["data"])
 		}
 		a.resourceMap = theMap
@@ -71,9 +71,8 @@ func (a *SmallAsset) scheduling() (string, error) {
                         if ok {
                                 if preempt {
 					return "Preemptible", nil
-                                } else {
-					return "OnDemand", nil
                                 }
+				return "OnDemand", nil
                         }
                 }
         }
@@ -89,7 +88,7 @@ func (a *SmallAsset) machineType() (string, error) {
 	}
 	machineType, ok := a.resourceMap["machineType"].(string)
         if !ok {
-	        return "", fmt.Errorf("expected machine type to be a string but it is a %T\n",
+	        return "", fmt.Errorf("expected machine type to be a string but it is a %T",
 		a.resourceMap["machineType"])
         }
         path := strings.Split(machineType, "/")
@@ -105,7 +104,7 @@ func (a *SmallAsset) diskType() (string, error) {
 	}
 	diskType, ok := a.resourceMap["type"].(string)
 	if !ok {
-		return "", fmt.Errorf("Expected disk type to be a string but it is a %T\n",
+		return "", fmt.Errorf("expected disk type to be a string but it is a %T",
 		a.resourceMap["type"])
 	}
 	path := strings.Split(diskType, "/")
@@ -132,7 +131,7 @@ func (a *SmallAsset) regions() ([]string, error) {
 	if a.resourceMap["zone"] != nil {
 		zone, ok := a.resourceMap["zone"].(string)
 		if !ok {
-			return nil, fmt.Errorf("expected zone to be a string but it is a %T\n", a.resourceMap["zone"])
+			return nil, fmt.Errorf("expected zone to be a string but it is a %T", a.resourceMap["zone"])
 		}
 		path := strings.Split(zone, "/")
 		z := path[len(path)-1]
@@ -172,7 +171,7 @@ func (a *SmallAsset) networkName() (string, error) {
 	}
 	nw, ok := a.resourceMap["network"].(string)
 	if !ok {
-		return "None", fmt.Errorf("network entry was a %T not a string\n",
+		return "None", fmt.Errorf("network entry was a %T not a string",
 		a.resourceMap["network"])
 	}
 	parts := strings.Split(nw, "/")
@@ -188,14 +187,14 @@ func (a *SmallAsset) serviceAccountName() (string, error) {
 	}
 	n, ok := a.resourceMap["name"].(string)
 	if !ok {
-		return "None", fmt.Errorf("name was a %T not a string\n",
+		return "None", fmt.Errorf("name was a %T not a string",
 		a.resourceMap["network"])
 	}
 	parts := strings.Split(n, "/")
 	// service account names have the form projects/<proj name>/serviceAccounts/<email>
 	// keys look like an account name with "keys/<some uuid>" appended
 	if len(parts) < 4 {
-		return "None", fmt.Errorf("unexpected name format for service account or key: %s\n", n)
+		return "None", fmt.Errorf("unexpected name format for service account or key: %s", n)
 	}
 	return parts[3], nil
 }
