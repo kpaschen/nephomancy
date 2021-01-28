@@ -37,7 +37,7 @@ func (Firewall) MaxResourceUsage() (map[string]ResourceUsage, error) { return ni
 
 type Subnetwork struct {
 	Name string
-	IpRange string
+	IPRange string
 	Region string
 	networkName string
 }
@@ -51,7 +51,7 @@ func (s Subnetwork) Regions() []string { return []string{s.Region} }
 func (Subnetwork) MaxResourceUsage() (map[string]ResourceUsage, error) { return nil, nil }
 
 type Route struct {
-	IpRange string
+	IPRange string
 	networkName string
 }
 func (Route) ResourceFamily() string { return "Network" }
@@ -137,9 +137,8 @@ func (Disk) BillingService() string { return BS_COMPUTE }
 func (d Disk) Regions() []string {
 	if d.IsRegional {
 		return []string{d.ZoneOrRegion}
-	} else {
-		return nil
 	}
+	return nil
 }
 func (d Disk) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	return map[string]ResourceUsage{
@@ -179,7 +178,7 @@ func (i Instance) Regions() []string {
 }
 func (i Instance) MaxResourceUsage() (map[string]ResourceUsage, error) {
 	if i.MachineType.CpuCount == 0 {
-		return nil, fmt.Errorf("Missing compute metadata for instance %+v\n", i)
+		return nil, fmt.Errorf("missing compute metadata for instance %+v", i)
 	}
 	cpuCount := i.MachineType.CpuCount
 	memoryGb := i.MachineType.MemoryMb / 1024
@@ -280,10 +279,10 @@ func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 	diskName, _ := a.resourceMap["name"].(string)
 	regions, err := a.regions()
 	if err != nil || len(regions) == 0 {
-		return fmt.Errorf("missing both zone and region for disk %+v\n", a)
+		return fmt.Errorf("missing both zone and region for disk %+v", a)
 	}
 	if len(regions) > 1 {
-		return fmt.Errorf("multiple regions for regional disk? %+v\n", a)
+		return fmt.Errorf("multiple regions for regional disk? %+v", a)
 	}
 	zoneOrRegion := regions[0]
 	storageSize, _ := a.storageSize()
@@ -310,7 +309,7 @@ func (as *AssetStructure) buildDisk(a SmallAsset, isRegional bool) error {
 
 func (as *AssetStructure) buildImage(a SmallAsset) error {
 	if a.resourceMap["sourceDisk"] == nil {
-		return fmt.Errorf("missing sourceDisk resource for image %+v\n", a)
+		return fmt.Errorf("missing sourceDisk resource for image %+v", a)
 	}
 	sdn, _ := a.resourceMap["sourceDisk"].(string)
 	parts := strings.Split(sdn, "/")
@@ -481,7 +480,7 @@ func (as *AssetStructure) buildRoute(a SmallAsset) error {
 	ipRange, _ := a.resourceMap["destRange"].(string)
 	networkName, _ := a.networkName()
 	r := Route{
-		IpRange: ipRange,
+		IPRange: ipRange,
 		networkName: networkName,
 	}
 	// Do we already have the network?
@@ -509,7 +508,7 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 	network, _ := a.networkName()
         s := Subnetwork{
 		Name: name,
-		IpRange: ipRange,
+		IPRange: ipRange,
 		Region: region,
 		networkName: network,
 	}
@@ -530,7 +529,7 @@ func (as *AssetStructure) buildSubnetwork(a SmallAsset) error {
 
 func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error) {
 	if as.Instances == nil {
-		return nil, fmt.Errorf("instance map for this project has not been initialized\n")
+		return nil, fmt.Errorf("instance map for this project has not been initialized")
 	}
 	ret := make(map[string]int32)
 	for _, instList := range as.Instances {
@@ -563,16 +562,16 @@ func (as *AssetStructure) InstanceGroupsForNetworking() (map[string]int32, error
 
 func (as *AssetStructure) reconcile() error {
 	if len(as.danglingRoutes) > 0 {
-		return fmt.Errorf("orphaned routes: %+v\n", as.danglingRoutes)
+		return fmt.Errorf("orphaned routes: %+v", as.danglingRoutes)
 	}
 	if len(as.danglingSubnetworks) > 0 {
-		return fmt.Errorf("orphaned Subnetworks: %+v\n", as.danglingSubnetworks)
+		return fmt.Errorf("orphaned Subnetworks: %+v", as.danglingSubnetworks)
 	}
 	if len(as.danglingFirewalls) > 0 {
-		return fmt.Errorf("orphaned Firewalls: %+v\n", as.danglingFirewalls)
+		return fmt.Errorf("orphaned Firewalls: %+v", as.danglingFirewalls)
 	}
 	if len(as.danglingImages) > 0 {
-		return fmt.Errorf("orphaned Images: %+v\n", as.danglingImages)
+		return fmt.Errorf("orphaned Images: %+v", as.danglingImages)
 	}
 	return nil
 }

@@ -45,7 +45,7 @@ func (pricingInfo *PricingInfo) AggregationLevel() (string, error) {
 	json.Unmarshal(aBytes, &ag)
 	lvl, ok := ag["aggregationLevel"].(string)
 	if !ok {
-		return "", fmt.Errorf("aggregation level has unexpected type %T\n", ag["aggregationLevel"])
+		return "", fmt.Errorf("aggregation level has unexpected type %T", ag["aggregationLevel"])
 	}
 	return lvl, nil
 }
@@ -56,11 +56,11 @@ func FromJson(pricingExpression *string) (*Pricing, error) {
 	json.Unmarshal(pBytes, &pi)
 	baseUnit, ok := pi["baseUnit"].(string)
 	if !ok {
-		return nil, fmt.Errorf("missing baseunit on pricing expression %s\n", *pricingExpression)
+		return nil, fmt.Errorf("missing baseunit on pricing expression %s", *pricingExpression)
 	}
 	cf, ok := pi["baseUnitConversionFactor"].(float64)
 	if !ok {
-		return nil, fmt.Errorf("conv factor is type %T\n", pi["baseUnitConversionFactor"])
+		return nil, fmt.Errorf("conv factor is type %T", pi["baseUnitConversionFactor"])
 	}
 	conversionFactor := int64(cf)
 	usageUnit, ok := pi["usageUnit"].(string)
@@ -69,19 +69,19 @@ func FromJson(pricingExpression *string) (*Pricing, error) {
 	}
 	rates, ok := pi["tieredRates"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("tiered rates are type %T\n", pi["tieredRates"])
+		return nil, fmt.Errorf("tiered rates are type %T", pi["tieredRates"])
 	}
 	tieredRates := make([]Rate, 0)
 	for _, r := range rates {
 		// Each 'rate' is a map
 		rate, ok := r.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("tiered rate is type %T\n", r)
+			return nil, fmt.Errorf("tiered rate is type %T", r)
 		}
 
 		uMap, ok := rate["unitPrice"].(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unit price type is %T\n", rate["unitPrice"])
+			return nil, fmt.Errorf("unit price type is %T", rate["unitPrice"])
 		}
 		currencyCode, ok := uMap["currencyCode"].(string)
 		if !ok {

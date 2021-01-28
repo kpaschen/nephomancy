@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
+	// concrete db driver even though the code only refers to interface.
 	_ "github.com/mattn/go-sqlite3"
 )
 

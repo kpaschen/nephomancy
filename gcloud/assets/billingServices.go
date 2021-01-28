@@ -16,7 +16,7 @@ type BillingService struct {
 	BusinessEntityName string
 	DisplayName string
 	Name string
-	ServiceId string
+	ServiceID string
 }
 
 type skuCategory struct {
@@ -69,7 +69,7 @@ func ListBillingServices() (map[string]BillingService, error) {
 				BusinessEntityName: s.BusinessEntityName,
 				DisplayName: s.DisplayName,
 				Name: s.Name,
-				ServiceId: s.ServiceId,
+				ServiceID: s.ServiceId,
 			}
 		}
 		if resp.NextPageToken == "" {
