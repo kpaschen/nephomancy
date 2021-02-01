@@ -6,7 +6,10 @@ $(GOLINT):
 common:
 	$(MAKE) -C common/
 
-nephomancy: common
+gcloud:
+	$(MAKE) -C gcloud/
+
+nephomancy: common gcloud
 	go build
 
 test: nephomancy

@@ -2,11 +2,12 @@ package command
 
 import (
 	"fmt"
-	"encoding/json"
+	//"encoding/json"
+	"google.golang.org/protobuf/encoding/protojson"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
-	"nephomancy/gcloud/cache"
+	//"nephomancy/gcloud/cache"
 )
 
 type AssetsCommand struct {
@@ -53,6 +54,7 @@ func (c *AssetsCommand) Run(args []string) int {
 		log.Fatalf("Could not open sku cache db: %v\n", err)
 	}
 	defer c.CloseDb()
+	_ = db
 
 	/*
 	err = assets.GetProject(project)
@@ -65,19 +67,16 @@ func (c *AssetsCommand) Run(args []string) int {
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
 	}
-	assetStructure, err := assets.BuildAssetStructure(ax)
+	p, err := assets.BuildProject(ax)
 	if err != nil {
-		log.Fatalf("Structuring assets failed: %v", err)
+		log.Fatalf("Building project failed: %v", err)
 	}
-	err = cache.AddResourceTypesToAssets(db, assetStructure)
-	if err != nil {
-		log.Fatalf("Could not add resource types: %v", err)
+	options := protojson.MarshalOptions{
+		Multiline: true,
+		Indent: "  ",
 	}
-	structureAsJsonBytes, err := json.MarshalIndent(*assetStructure, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal json: %v", err)
-	}
-	fmt.Printf("structure: %s\n", string(structureAsJsonBytes))
+	str := options.Format(p)
+	fmt.Printf("project: %s\n", str)
 
 	return 0
 }
