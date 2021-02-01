@@ -3,12 +3,22 @@ package assets
 import (
 	"fmt"
 	"strings"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"github.com/golang/protobuf/ptypes"
 	common "nephomancy/common/resources"
 )
 
 const GcloudProvider = "gcloud"
+
+// This can be in common
+func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
+	p := &common.Project{}
+	if err := protojson.Unmarshal(projectAsJsonBytes, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
 
 // BuildProject takes a list of small assets and create a project proto
 // containing lists of vm sets, disk sets, and images.
