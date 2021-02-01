@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
@@ -70,15 +71,19 @@ func (c *CostCommand) Run(args []string) int {
 	if err != nil {
 		log.Fatalf("Listing assets failed: %v", err)
 	}
-	proj, err := assets.BuildAssetStructure(ax)
+	proj, err := assets.BuildProject(ax)
 	if err != nil {
-		log.Fatalf("Building asset structure failed: %v", err)
+		log.Fatalf("Building project failed: %v", err)
 	}
-	err = cache.AddResourceTypesToAssets(db, proj)
+	err = cache.AddResourceTypesToProject(db, proj)
         if err != nil {
                 log.Fatalf("Could not add resource types: %v", err)
         }
-	err = pricing.GetCost(db, *proj)
+	fmt.Printf("project: %s\n", protojson.MarshalOptions{
+		Multiline: true,
+		Indent: "  ",
+	}.Format(proj))
+	err = pricing.GetCost(db, proj)
 	if err != nil {
 		log.Fatalf("Failed to get pricing information: %v", err)
 	}

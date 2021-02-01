@@ -71,9 +71,9 @@ func ListMachineTypes(project string, zone string) ([]MachineType, error) {
 				}
 			}
 			rt[idx] = MachineType{
-				CpuCount: t.GuestCpus,
+				CpuCount: uint32(t.GuestCpus),
 				IsSharedCpu: shared,
-				MemoryMb: t.MemoryMb,
+				MemoryMb: uint64(t.MemoryMb),
 				Name: t.Name,
 				Accelerators: at,
 			}

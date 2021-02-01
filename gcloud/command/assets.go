@@ -2,12 +2,10 @@ package command
 
 import (
 	"fmt"
-	//"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
-	//"nephomancy/gcloud/cache"
 )
 
 type AssetsCommand struct {

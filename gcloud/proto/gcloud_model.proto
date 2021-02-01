@@ -16,3 +16,7 @@ message GCloudDisk {
   bool is_regional = 2;
 }
 
+message GCloudSubnetwork {
+  string tier = 1;
+}
+

@@ -8,7 +8,7 @@ import (
 	common "nephomancy/common/resources"
 )
 
-const provider = "gcloud"
+const GcloudProvider = "gcloud"
 
 // BuildProject takes a list of small assets and create a project proto
 // containing lists of vm sets, disk sets, and images.
@@ -63,7 +63,19 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				return nil, err
 			}
 		}
-		case "Project": {}
+		case "Project": {
+			// There are two project resources, one for the actual
+			// project and one for its parent. They have the project
+			// name in different fields.
+			err := as.ensureResourceMap()
+			if err != nil {
+				return nil, err
+			}
+			name, _ := as.resourceMap["projectId"].(string)
+			if name != "" {
+				p.Name = name
+			}
+		}
 	        case "Firewall": {}
 	        case "Route": {}
 		case "Network": {
@@ -182,7 +194,7 @@ func fingerprintVM(vm common.VM) (string, error) {
 		fmt.Fprintf(&fp, "%s:", vm.Type)
 	} else {
 		for pr, tp := range vm.ProviderDetails {
-			if provider == pr {
+			if GcloudProvider == pr {
 				var gvm GCloudVM
 				err := ptypes.UnmarshalAny(tp, &gvm)
 				if err != nil {
@@ -249,7 +261,7 @@ func createVM(a SmallAsset) (*common.VM, error) {
 		Zone: zone,
 		Region: region,
 		ProviderDetails: map[string]*anypb.Any{
-			provider: details,
+			GcloudProvider: details,
 		},
 	}
 
@@ -288,7 +300,7 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 		fmt.Fprintf(&fp, "%s:", disk.Type)
 	} else {
 		for pr, tp := range disk.ProviderDetails {
-			if provider == pr {
+			if GcloudProvider == pr {
 				var gdsk GCloudDisk
 				err := ptypes.UnmarshalAny(tp, &gdsk)
 				if err != nil {
@@ -327,7 +339,7 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 		Region: regions[0],
 		ActualSizeGb: uint64(sizeGB),
 		ProviderDetails: map[string]*anypb.Any{
-			provider: details,
+			GcloudProvider: details,
 		},
 	}
 	return &ret, nil
@@ -336,8 +348,13 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 func createImage(a SmallAsset) (*common.Image, error) {
 	// Not handling licenses yet (or maybe ever).
 	size, _ := a.storageSize()
+	regions, _ := a.regions()
+	if len(regions) != 1 {
+		return nil, fmt.Errorf("unexpected number of regions in image: %v", regions)
+	}
 	return &common.Image{
 		SizeGb: uint32(size),
+		Region: regions[0],
 	}, nil
 }
 

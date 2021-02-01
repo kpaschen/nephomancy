@@ -5,29 +5,47 @@ import (
 	"fmt"
 	"log"
 	"nephomancy/gcloud/assets"
+	"github.com/golang/protobuf/ptypes"
 	_ "github.com/mattn/go-sqlite3"
+	common "nephomancy/common/resources"
 )
 
-func AddResourceTypesToAssets(db *sql.DB, ax *assets.AssetStructure) error {
-	for _, instList := range ax.Instances {
-		for _, inst := range instList {
-			mt, err := getMachineType(db, inst.MachineTypeName)
-			if err != nil {
-				return err
-			}
-			inst.MachineType = mt
-		}
-	}
-	for _, dsk := range ax.Disks {
-		region := ""
-		if dsk.IsRegional {
-			region = dsk.ZoneOrRegion
-		}
-		dt, err := getDiskType(db, dsk.DiskTypeName, region)
+// Resolve the provider-specific resource types into generic machine and
+// disk types. Fails if resource types are not found or if the settings
+// are inconsistent.
+func AddResourceTypesToProject(db *sql.DB, p *common.Project) error {
+	for _, vmset := range p.VmSets {
+		var gvm assets.GCloudVM
+		err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm)
 		if err != nil {
 			return err
 		}
-		dsk.DiskType = dt
+		mt, err := getMachineType(db, gvm.MachineType)
+		if err != nil {
+			return err
+		}
+		// Should probably check if this was already set and
+		// verify that it matches if so?
+		vmset.Template.Type = &common.MachineType{
+			CpuCount: mt.CpuCount,
+			MemoryGb: uint32(mt.MemoryMb / 1000),
+			GpuCount: 0,  // FIXME
+		}
+	}
+	for _, dset := range p.DiskSets {
+		var dsk assets.GCloudDisk
+		err := ptypes.UnmarshalAny(dset.Template.ProviderDetails[assets.GcloudProvider], &dsk)
+		if err != nil {
+			return err
+		}
+		region := ""
+		if dsk.IsRegional {
+			region = dset.Template.Region
+		}
+		dt, err := getDiskType(db, dsk.DiskType, region)
+		dset.Template.Type = &common.DiskType{
+			SizeGb: uint32(dt.DefaultSizeGb),
+		}
 	}
 	return nil
 }
@@ -52,8 +70,8 @@ func getMachineType(db *sql.DB, mt string) (assets.MachineType, error) {
 		shared := isSharedCpu != 0
 		return assets.MachineType{
 			Name: mt,
-			CpuCount: cpuCount,
-			MemoryMb: memoryMb,
+			CpuCount: uint32(cpuCount),
+			MemoryMb: uint64(memoryMb),
 			IsSharedCpu: shared,
 
 		}, nil

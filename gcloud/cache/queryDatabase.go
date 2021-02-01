@@ -3,12 +3,18 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"github.com/golang/protobuf/ptypes"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
+        common "nephomancy/common/resources"
 	// concrete db driver even though the code only refers to interface.
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const ComputeService = "6F81-5844-456A"
+const ContainerService = "CCD8-9BF1-090E"
+const MonitoringService = "58CD-E7C3-72CA"
 
 // returns a map of skuid to pricing info
 func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error) {
@@ -68,13 +74,7 @@ func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error)
 	return ret, nil
 }
 
-func getBeginningOfSkuQuery(querySku *strings.Builder, asset assets.BaseAsset) {
-	service := asset.BillingService()
-	if service == assets.BS_TODO {
-		return
-	}
-	resource := asset.ResourceFamily()
-	regions := asset.Regions()
+func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource string, regions []string) {
 	fmt.Fprintf(querySku, `SELECT Sku.SkuId
 	FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
 	WHERE Sku.ServiceId='%s' AND Sku.ResourceFamily='%s'`, service, resource)
@@ -92,13 +92,18 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, asset assets.BaseAsset) {
 	}
 }
 
-func GetSkusForInstance(db *sql.DB, asset assets.Instance) ([]string, error) {
+func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, asset)
-	if asset.Scheduling != "" {
-		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", asset.Scheduling)
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{vm.Region})
+	var gvm assets.GCloudVM
+	err := ptypes.UnmarshalAny(vm.ProviderDetails[assets.GcloudProvider], &gvm)
+	if err != nil {
+		return nil, err
 	}
-	machineType := asset.MachineTypeName
+	if gvm.Scheduling != "" {
+		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", gvm.Scheduling)
+	}
+	machineType := gvm.MachineType
 	// Now the machine type is something like 'n1-standard-2' but the ResourceGroup
 	// only uses part of that, so n1-standard-2 needs ResourceGroup N1Standard.
 	// TODO: not sure if this is always correct, maybe need to do a lookup table.
@@ -114,12 +119,16 @@ func GetSkusForInstance(db *sql.DB, asset assets.Instance) ([]string, error) {
 	return getSkusForQuery(db, querySku.String())
 }
 
-func GetSkusForDisk(db *sql.DB, asset assets.Disk) ([]string, error) {
+func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, asset)
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{disk.Region})
 
-	// TODO: look for status "READY"
-	diskType := asset.DiskTypeName
+	var gd assets.GCloudDisk
+	err := ptypes.UnmarshalAny(disk.ProviderDetails[assets.GcloudProvider], &gd)
+	if err != nil {
+		return nil, err
+	}
+	diskType := gd.DiskType
 	resourceGroup := ""
 	switch diskType {
 	case "pd-standard":
@@ -131,7 +140,7 @@ func GetSkusForDisk(db *sql.DB, asset assets.Disk) ([]string, error) {
 	}
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	// TODO the region query isn't quite right for all disk types.
-	if asset.IsRegional {
+	if gd.IsRegional {
 		querySku.WriteString(" AND Sku.Description like 'Regional %' ")
 	} else {
 		querySku.WriteString(" AND Sku.Description like 'Storage %' AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
@@ -142,9 +151,9 @@ func GetSkusForDisk(db *sql.DB, asset assets.Disk) ([]string, error) {
 	return getSkusForQuery(db, querySku.String())
 }
 
-func GetSkusForImage(db *sql.DB, asset assets.Image) ([]string, error) {
+func GetSkusForImage(db *sql.DB, image common.Image) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, asset)
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }
@@ -239,7 +248,6 @@ func GetSkusForInternalEgress(db *sql.DB, region string) ([]string, error) {
 }
 
 func getSkusForQuery(db *sql.DB, query string) ([]string, error) {
-	fmt.Printf("query: %s\n", query)
 	res, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -263,4 +271,3 @@ func getSkusForQuery(db *sql.DB, query string) ([]string, error) {
 	}
 	return keys, nil
 }
-

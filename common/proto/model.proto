@@ -18,6 +18,7 @@ message DiskType {
 
 message Image {
   uint32 size_gb = 1;
+  string region = 2;
 }
 
 message VM {
@@ -79,8 +80,9 @@ message Network {
 }
 
 message Project {
-  repeated VMSet vm_sets = 1;
-  repeated DiskSet disk_sets = 2;
-  repeated Image images = 3;
-  repeated Network networks = 4;
+  string name = 1;
+  repeated VMSet vm_sets = 2;
+  repeated DiskSet disk_sets = 3;
+  repeated Image images = 4;
+  repeated Network networks = 5;
 }
