@@ -94,22 +94,22 @@ func (c *Command) ModelInFile() (string, error) {
 	if c.modelInFile == "" {
 		return "", nil
 	}
-	dd, err := c.DataDir()
+	wd, err := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dd, c.modelInFile), nil
+	return filepath.Join(wd, c.modelInFile), nil
 }
 
 func (c *Command) ModelOutFile() (string, error) {
 	if c.modelOutFile == "" {
 		return "", nil
 	}
-	dd, err  := c.DataDir()
+	wd, err  := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dd, c.modelOutFile), nil
+	return filepath.Join(wd, c.modelOutFile), nil
 }
 
 func (c *Command) DbHandle() (*sql.DB, error) {
