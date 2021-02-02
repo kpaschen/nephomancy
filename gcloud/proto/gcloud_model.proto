@@ -1,0 +1,22 @@
+// Gcloud-specific extensions for the asset model
+
+syntax = "proto3";
+
+package model;
+option go_package = ".;assets";
+
+message GCloudVM {
+  string machine_type = 1;
+  string scheduling = 2;
+  string network_tier = 3;
+}
+
+message GCloudDisk {
+  string disk_type = 1;
+  bool is_regional = 2;
+}
+
+message GCloudSubnetwork {
+  string tier = 1;
+}
+

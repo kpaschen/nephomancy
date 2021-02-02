@@ -28,6 +28,15 @@ type Command struct {
 
 	// Internal handle for sqlite database holding the sku cache.
 	dbHandle *sql.DB
+
+	// File to load an asset model from.
+	modelInFile string
+
+	// File to save an asset model to.
+	modelOutFile string
+
+	// File to write cost report to.
+	costReportOutFile string
 }
 
 // Create a flag set with flags common to all commands.
@@ -35,6 +44,8 @@ func (c *Command) defaultFlagSet(cn string) *flag.FlagSet {
 	f := flag.NewFlagSet(cn, flag.ExitOnError)
 	f.StringVar(&c.workingDirFlag, "workingdir", "", "Working Directory. Defaults to current working directory.")
 	f.StringVar(&c.Project, "project", "", "The name of the gcloud project to use for API access.")
+	f.StringVar(&c.modelOutFile, "modelout", "", "Where to write the asset model to (json protobuf).")
+	f.StringVar(&c.modelInFile, "modelin", "", "Where to read the asset model from (json protobuf).")
 	return f
 }
 
@@ -77,6 +88,28 @@ func (c *Command) DbFile() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dd, "sku-cache.db"), nil
+}
+
+func (c *Command) ModelInFile() (string, error) {
+	if c.modelInFile == "" {
+		return "", nil
+	}
+	dd, err := c.DataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dd, c.modelInFile), nil
+}
+
+func (c *Command) ModelOutFile() (string, error) {
+	if c.modelOutFile == "" {
+		return "", nil
+	}
+	dd, err  := c.DataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dd, c.modelOutFile), nil
 }
 
 func (c *Command) DbHandle() (*sql.DB, error) {

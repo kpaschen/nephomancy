@@ -17,8 +17,8 @@ type AcceleratorType struct {
 
 type MachineType struct {
 	Name string
-	CpuCount int64
-	MemoryMb int64
+	CpuCount uint32
+	MemoryMb uint64
 	IsSharedCpu bool
 	Accelerators []AcceleratorType
 }

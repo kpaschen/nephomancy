@@ -3,11 +3,12 @@ syntax = "proto3";
 package model;
 option go_package = ".;resources";
 
+import "google/protobuf/any.proto";
+
 message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
-  // needs an enum or so for scheduling properties?
 }
 
 message DiskType {
@@ -17,35 +18,71 @@ message DiskType {
 
 message Image {
   uint32 size_gb = 1;
+  string region = 2;
 }
 
 message VM {
   string zone = 1;
   string region = 2;
   MachineType type = 3;
+  // You can have one detail per provider.
+  map<string, google.protobuf.Any> provider_details = 4;
+}
+
+// VMs with the same region and type
+message VMSet {
+  VM template = 2;
+  uint32 count = 3;
+  // for cost estimate: how many hours/month do you expect this vm to be running.
+  // When this is not set, cost estimate will be based on running continuously.
+  uint32 usage_hours_per_month = 4;
 }
 
 message Disk {
   string zone = 1;
   string region = 2;
   DiskType type = 3; 
+  // the size in the disk type is the maximum size for the disk.
+  uint64 actual_size_gb = 4;
+  // You can have one detail per provider.
+  map<string, google.protobuf.Any> provider_details = 5;
+}
+
+// Disks with the same region, type, and size
+message DiskSet {
+  Disk template = 2;
+  uint32 count = 3;
+  // for cost estimate: how much of the available space do you expect to be using (avg per month)
+  // When this is not set, cost estimate will be based on full usage.
+  uint32 percent_used_avg = 4;
 }
 
 message Subnetwork {
-  string region = 1;
-  uint64 max_ingress_gbits_per_second = 2;
-  uint64 max_external_egress_gbits_per_second = 3;
-  uint64 max_internal_egress_gbits_per_second = 4;
+  string name = 1;
+  string region = 2;
+  // for cost estimate: total gbits per month per subnetwork
+  // Note that there are provider-specific caps and quota settings
+  // that may apply and cause your effective bandwidth to be lower.
+  uint64 ingress_gbits_per_month = 3;
+  uint64 external_egress_gbits_per_month = 4;
+  uint64 internal_egress_gbits_per_month = 5;
+  // You can have one detail per provider.
+  map<string, google.protobuf.Any> provider_details = 6;
 }
 
 message Network {
-  repeated Subnetwork subnetworks = 1;
+  string name = 1;
+  repeated Subnetwork subnetworks = 2;
   // there are types of network (e.g. vpn), but the names and the implications
   // for billing vary by cloud provider.
+  // You can have one detail per provider.
+  map<string, google.protobuf.Any> provider_details = 3;
 }
 
 message Project {
-  repeated VM vms = 1;
-  repeated Disk disks = 2;
-  repeated Image images = 3;
+  string name = 1;
+  repeated VMSet vm_sets = 2;
+  repeated DiskSet disk_sets = 3;
+  repeated Image images = 4;
+  repeated Network networks = 5;
 }
