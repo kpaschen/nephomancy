@@ -3,8 +3,15 @@ package command
 import (
 	"database/sql"
 	"flag"
+	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	common "nephomancy/common/resources"
+	"nephomancy/gcloud/assets"
+	"github.com/kennygrant/sanitize"
 )
 
 type Command struct {
@@ -54,7 +61,7 @@ func (c *Command) WorkingDir() (string, error) {
 		return c.workingDir, nil
 	}
 	if c.workingDirFlag != "" {
-		c.workingDir = c.workingDirFlag
+		c.workingDir = sanitize.Name(c.workingDirFlag)
 		return c.workingDir, nil
 	}
 	pwd, err := os.Getwd()
@@ -98,18 +105,21 @@ func (c *Command) ModelInFile() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(wd, c.modelInFile), nil
+	infile := sanitize.Name(c.modelInFile)
+	return filepath.Join(wd, infile), nil
 }
 
-func (c *Command) ModelOutFile() (string, error) {
-	if c.modelOutFile == "" {
-		return "", nil
+func (c *Command) ModelOutFile(fallback string) (string, error) {
+	fname := c.modelOutFile
+	if fname == "" {
+		fname = fallback
 	}
+	outfile := sanitize.Name(fname)
 	wd, err  := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(wd, c.modelOutFile), nil
+	return filepath.Join(wd, outfile), nil
 }
 
 func (c *Command) DbHandle() (*sql.DB, error) {
@@ -135,5 +145,43 @@ func (c *Command) CloseDb() error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *Command) loadProject() (*common.Project, error) {
+	infile, err := c.ModelInFile()
+	if err != nil {
+		return nil, err
+	}
+	if infile == "" {
+		return nil, nil
+	}
+	pdata, err := ioutil.ReadFile(infile)
+	if err != nil {
+		return nil, err
+	}
+	p, err := assets.UnmarshalProject(pdata)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (c *Command) saveProject(p *common.Project) error {
+	fallback := sanitize.Name(fmt.Sprintf("%s.json", p.Name))
+	outfile, err := c.ModelOutFile(fallback)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(outfile, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	options := protojson.MarshalOptions{
+		Multiline: true,
+		Indent: "  ",
+	}
+	f.WriteString(options.Format(p))
+	log.Printf("Project %s saved to file %s\n", p.Name, outfile)
 	return nil
 }
