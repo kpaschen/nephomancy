@@ -2,7 +2,6 @@ package command
 
 import (
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
 	"log"
 	"strings"
 	"nephomancy/gcloud/assets"
@@ -15,32 +14,25 @@ type CostCommand struct {
 }
 
 func (*CostCommand) Help() string {
-	helpText := `
+	helpText := fmt.Sprintf(`
 	Usage: nephomancy gcloud cost [options]
 
-	Print a summary of resources and their estimated costs per month.
-	Resources include compute (VMs, licenses); network (IP addresses,
-	load balancers, egress); and storage (disks, images, cloud storage).
-	So far, resources such as BigTable, Spanner etc are not included.
+	Print a summary of assets and their estimated costs per month.
+	Not all assets supported by Google Cloud are included, and thus the
+	price estimate will be incomplete. For example, licenses as well as
+	most backend service costs are not included in the estimate.
 
 	Costs are estimated based on SKU pricing info published by Google.
 
-	I make no guarantee that the estimate will be correct; you can cross-check with
+	I provide no guarantee that the estimate will be correct; you can cross-check with
 	your project's billing console as well as with the Google Pricing Calculator.
 
 	Options:
-	  --workingdir=path  Optional: directory under which the cached data can be found.
-	                     The cost command needs this in order to locate the sku cache 
-			     database. If not set, defaults to current directory. The sku database
-			     will be looked for in $workingdir/.nephomancy/gcloud/data/sku-dache.db.
-			     If you do not have a cache db yet, create one using nephomancy gcloud init.
-
-	  --project=PROJECT  ID of a gcloud project. The user you are authenticating as must have
-	                     access to this project. The billing, compute, asset, and monitoring APIs
-			     must be enabled for this project. Costs reported will be for assets associated
-			     with this project as well as for assets whose costs are only available at
-			     the organization or billing account level.
-`
+	  --project=PROJECT  %s
+	  --workingdir=path  %s
+	  --projectin=filename %s
+	  --costreport=filename %s
+`, projectDoc, workingDirDoc, projectInDoc, costReportDoc)
 	return strings.TrimSpace(helpText)
 }
 
@@ -60,32 +52,51 @@ func (c *CostCommand) Run(args []string) int {
 	}
 	defer c.CloseDb()
 
-	project := c.Command.Project
-	if project == "" {
-		log.Fatalf("Need a project ID. You can see the IDs on the Gcloud console.\n")
+	project, err := c.loadProject()
+	if err != nil {
+		log.Fatalf("Failed to load project from file: %v\n", err)
 	}
 
-	projectPath := fmt.Sprintf("projects/%s", project)
+	projectName := c.Command.Project
 
-	ax, err := assets.ListAssetsForProject(projectPath)
-	if err != nil {
-		log.Fatalf("Listing assets failed: %v", err)
+	if project == nil {
+		if projectName == "" {
+			log.Fatalf("Need a project ID. You can see the IDs on the Gcloud console.\n")
+		}
+		projectPath := fmt.Sprintf("projects/%s", project)
+		ax, err := assets.ListAssetsForProject(projectPath)
+		if err != nil {
+			log.Fatalf("Listing assets failed: %v", err)
+		}
+		proj, err := assets.BuildProject(ax)
+		if err != nil {
+			log.Fatalf("Building project failed: %v", err)
+		}
+		project = proj
 	}
-	proj, err := assets.BuildProject(ax)
+	err = cache.AddResourceTypesToProject(db, project)
 	if err != nil {
-		log.Fatalf("Building project failed: %v", err)
+		log.Fatalf("Could not add resource types: %v", err)
 	}
-	err = cache.AddResourceTypesToProject(db, proj)
-        if err != nil {
-                log.Fatalf("Could not add resource types: %v", err)
-        }
-	fmt.Printf("project: %s\n", protojson.MarshalOptions{
-		Multiline: true,
-		Indent: "  ",
-	}.Format(proj))
-	err = pricing.GetCost(db, proj)
+	costs, err := pricing.GetCost(db, project)
 	if err != nil {
 		log.Fatalf("Failed to get pricing information: %v", err)
 	}
+	if projectName == "" {
+		projectName = project.Name
+	}
+	reporter := pricing.CostReporter{}
+	f, err := c.Command.getCostFile(projectName)
+	if err != nil {
+		log.Fatalf("Failed to create report file: %v", err)
+	}
+	reporter.Init(f)
+	for _, c := range costs {
+		if err = reporter.AddLine(c); err != nil {
+			log.Fatalf("Failed to report cost line: %v", err)
+		}
+	}
+	reporter.Flush()
+	log.Printf("Wrote costs to %s\n", f.Name())
 	return 0
 }

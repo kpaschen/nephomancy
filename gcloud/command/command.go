@@ -9,10 +9,21 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
 	"github.com/kennygrant/sanitize"
 )
+
+const projectDoc = `ID of a gcloud project. The user you are authenticating as must have access to this project. The billing, compute, asset, and monitoring APIs must be enabled for this project, and your user must be authorized to use them.`
+
+const workingDirDoc = `Path to working directory. Defaults to current working directory. A data directory called .nephomancy/gcloud/data will be created underneath this working directory if it does not exist yet.`
+
+const projectInDoc = `Filename to read project information from. This is an alternative to specifying the ID of a gcloud project. The project is expected to be represented as a json-encoded protocol buffer. You can obtain a template by saving an existing project using the projectout parameter.`
+
+const projectOutDoc = `Filename to save project information to. Project information will be written as a json-encoded protocol buffer.`
+
+const costReportDoc = `Filename to save cost report (csv) to.`
 
 type Command struct {
 	// All relative paths are relative to this directory.
@@ -36,23 +47,24 @@ type Command struct {
 	// Internal handle for sqlite database holding the sku cache.
 	dbHandle *sql.DB
 
-	// File to load an asset model from.
-	modelInFile string
+	// File to load a project from.
+	projectInFile string
 
-	// File to save an asset model to.
-	modelOutFile string
+	// File to save the project to.
+	projectOutFile string
 
 	// File to write cost report to.
-	costReportOutFile string
+	costReportFile string
 }
 
-// Create a flag set with flags common to all commands.
+// Create a flag set with flags common to most commands.
 func (c *Command) defaultFlagSet(cn string) *flag.FlagSet {
 	f := flag.NewFlagSet(cn, flag.ExitOnError)
 	f.StringVar(&c.workingDirFlag, "workingdir", "", "Working Directory. Defaults to current working directory.")
 	f.StringVar(&c.Project, "project", "", "The name of the gcloud project to use for API access.")
-	f.StringVar(&c.modelOutFile, "modelout", "", "Where to write the asset model to (json protobuf).")
-	f.StringVar(&c.modelInFile, "modelin", "", "Where to read the asset model from (json protobuf).")
+	f.StringVar(&c.projectOutFile, "projectout", "", "Where to save the project (json protobuf).")
+	f.StringVar(&c.projectInFile, "projectin", "", "Where to read the project from (json protobuf).")
+	f.StringVar(&c.costReportFile, "costreport", "", "Where to write the cost report (csv).")
 	return f
 }
 
@@ -61,7 +73,7 @@ func (c *Command) WorkingDir() (string, error) {
 		return c.workingDir, nil
 	}
 	if c.workingDirFlag != "" {
-		c.workingDir = sanitize.Name(c.workingDirFlag)
+		c.workingDir = filepath.Clean(c.workingDirFlag)
 		return c.workingDir, nil
 	}
 	pwd, err := os.Getwd()
@@ -97,24 +109,41 @@ func (c *Command) DbFile() (string, error) {
 	return filepath.Join(dd, "sku-cache.db"), nil
 }
 
-func (c *Command) ModelInFile() (string, error) {
-	if c.modelInFile == "" {
+func (c *Command) ProjectInFile() (string, error) {
+	if c.projectInFile == "" {
 		return "", nil
 	}
 	wd, err := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
-	infile := sanitize.Name(c.modelInFile)
+	infile := sanitize.Name(c.projectInFile)
 	return filepath.Join(wd, infile), nil
 }
 
-func (c *Command) ModelOutFile(fallback string) (string, error) {
-	fname := c.modelOutFile
+func (c *Command) ProjectOutFile(fallback string) (string, error) {
+	fname := c.projectOutFile
 	if fname == "" {
 		fname = fallback
 	}
 	outfile := sanitize.Name(fname)
+	wd, err  := c.WorkingDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(wd, outfile), nil
+}
+
+func (c *Command) CostReportFile(fallback string) (string, error) {
+	fname := c.costReportFile
+	if fname == "" {
+		fname = fallback
+	}
+	outfile := sanitize.Name(fname)
+	parts := strings.Split(outfile, ".")
+	if len(parts) <= 1 || parts[len(parts)-1] != "csv" {
+		outfile += ".csv"
+	}
 	wd, err  := c.WorkingDir()
 	if err != nil {
 		return "", err
@@ -149,7 +178,7 @@ func (c *Command) CloseDb() error {
 }
 
 func (c *Command) loadProject() (*common.Project, error) {
-	infile, err := c.ModelInFile()
+	infile, err := c.ProjectInFile()
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +198,7 @@ func (c *Command) loadProject() (*common.Project, error) {
 
 func (c *Command) saveProject(p *common.Project) error {
 	fallback := sanitize.Name(fmt.Sprintf("%s.json", p.Name))
-	outfile, err := c.ModelOutFile(fallback)
+	outfile, err := c.ProjectOutFile(fallback)
 	if err != nil {
 		return err
 	}
@@ -184,4 +213,16 @@ func (c *Command) saveProject(p *common.Project) error {
 	f.WriteString(options.Format(p))
 	log.Printf("Project %s saved to file %s\n", p.Name, outfile)
 	return nil
+}
+
+func (c *Command) getCostFile(fallback string) (*os.File, error) {
+	fname, err := c.CostReportFile(fallback)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(fname, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
