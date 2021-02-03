@@ -118,8 +118,8 @@ func ListSkus(billingServiceName *string) (map[string]BillingServiceSku, error) 
 				gtType = s.GeoTaxonomy.Type
 				gtRegions = strings.Join(s.GeoTaxonomy.Regions, ", ")
 			}
-			pInfo := make([]PricingInfo, 0, 5)
-			for _, p := range s.PricingInfo {
+			pInfo := make([]PricingInfo, len(s.PricingInfo))
+			for idx, p := range s.PricingInfo {
 				pBytes, err := p.PricingExpression.MarshalJSON()
 				if err != nil {
 					return nil, err
@@ -137,13 +137,13 @@ func ListSkus(billingServiceName *string) (map[string]BillingServiceSku, error) 
 					return nil, err
 				}
 				timestamp := ts.Unix()
-				pInfo = append(pInfo, PricingInfo{
+				pInfo[idx] = PricingInfo{
 					EffectiveFrom: timestamp,
 					Summary: p.Summary,
 					PricingExpression: string(pBytes),
 					AggregationInfo: aggregationInfo,
 					CurrencyConversionRate: p.CurrencyConversionRate,
-				})
+				}
 			}
 			ret[s.Name] = BillingServiceSku{
 				Category: &cat,

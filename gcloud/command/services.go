@@ -38,10 +38,15 @@ func (c *ServicesCommand) Run(args []string) int {
 	if project == "" {
 		log.Fatalf("Need a project ID. You can see the IDs on the GCloud console.\n")
 	}
-
 	projectPath := fmt.Sprintf("projects/%s", project)
 
-	err := assets.ListServices(projectPath)
+	err := assets.ListRegions(project)
+	if err != nil {
+		log.Fatalf("Failed to get regions: %v", err)
+	}
+
+
+	err = assets.ListServices(projectPath)
 	if err != nil {
 		log.Fatalf("Failed to get services: %v", err)
 	}

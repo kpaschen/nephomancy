@@ -7,6 +7,31 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
+func ListRegions(project string) error {
+	ctx := context.Background()
+	const pageSize int64 = 100
+	client, err := compute.NewService(ctx)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Regions.List(project).MaxResults(pageSize).Do()
+	if err != nil {
+		return err
+	}
+	for _, t := range resp.Items {
+		fmt.Printf("region: %+v\n", t)
+		for _, q := range t.Quotas {
+			qu, err  := q.MarshalJSON()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("quota: %+v\n", string(qu))
+		}
+	}
+	return nil
+}
+
 func ListZones(project string) ([]RegionZone, error) {
 	ctx := context.Background()
 	const pageSize int64 = 100

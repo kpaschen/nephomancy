@@ -97,8 +97,13 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 		for _, p := range s.PricingInfo {
 			pr, err := FromJson(&p.PricingExpression)
 			if err != nil {
-				log.Printf("Failed to parse pricing expression %s: %v\n",
-				p.PricingExpression, err)
+				// A few Skus have nil tiered rates so FromJson
+				// cannot determine the type for the empty list.
+				// That should be harmless, especially since
+				// TieredRates being nil means there is no
+				// charge for this Sku.
+				log.Printf("sku %s (%s): failed to parse pricing expression %s: %v\n",
+				s.SkuId, s.Description, p.PricingExpression, err)
 				continue
 			}
 			_, err = pStatement.Exec(
