@@ -7,29 +7,36 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func ListRegions(project string) error {
+func ListRegions(project string) ([]string, error) {
 	ctx := context.Background()
 	const pageSize int64 = 100
 	client, err := compute.NewService(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	ret := make([]string, 0)
 	resp, err := client.Regions.List(project).MaxResults(pageSize).Do()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, t := range resp.Items {
 		fmt.Printf("region: %+v\n", t)
-		for _, q := range t.Quotas {
-			qu, err  := q.MarshalJSON()
-			if err != nil {
-				return err
+		if t.Deprecated != nil {
+			state := t.Deprecated.State
+			if state == "ACTIVE" || state == "DEPRECATED" {
+				fmt.Printf("region %s is going to be deprecated.\n",
+				t.Name)
+			} else {
+				fmt.Printf("region %s has been deprecated\n",
+				t.Name)
 			}
-			fmt.Printf("quota: %+v\n", string(qu))
+			continue
 		}
+		ret = append(ret, t.Name)
+
 	}
-	return nil
+	return ret, nil
 }
 
 func ListZones(project string) ([]RegionZone, error) {

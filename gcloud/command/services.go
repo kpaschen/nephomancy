@@ -40,10 +40,11 @@ func (c *ServicesCommand) Run(args []string) int {
 	}
 	projectPath := fmt.Sprintf("projects/%s", project)
 
-	err := assets.ListRegions(project)
+	regions, err := assets.ListRegions(project)
 	if err != nil {
 		log.Fatalf("Failed to get regions: %v", err)
 	}
+	fmt.Printf("regions: %v", regions)
 
 
 	err = assets.ListServices(projectPath)

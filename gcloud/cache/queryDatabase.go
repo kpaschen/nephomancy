@@ -93,13 +93,13 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 }
 
 func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
-	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{vm.Region})
 	var gvm assets.GCloudVM
 	err := ptypes.UnmarshalAny(vm.ProviderDetails[assets.GcloudProvider], &gvm)
 	if err != nil {
 		return nil, err
 	}
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{gvm.Region})
 	if gvm.Scheduling != "" {
 		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", gvm.Scheduling)
 	}
@@ -120,14 +120,14 @@ func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
 }
 
 func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
-	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{disk.Region})
 
 	var gd assets.GCloudDisk
 	err := ptypes.UnmarshalAny(disk.ProviderDetails[assets.GcloudProvider], &gd)
 	if err != nil {
 		return nil, err
 	}
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
 	diskType := gd.DiskType
 	resourceGroup := ""
 	switch diskType {
@@ -152,8 +152,13 @@ func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
 }
 
 func GetSkusForImage(db *sql.DB, image common.Image) ([]string, error) {
+	var gi assets.GCloudImage
+	err := ptypes.UnmarshalAny(image.ProviderDetails[assets.GcloudProvider], &gi)
+	if err != nil {
+		return nil, err
+	}
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gi.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }

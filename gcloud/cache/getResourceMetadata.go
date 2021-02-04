@@ -40,7 +40,7 @@ func AddResourceTypesToProject(db *sql.DB, p *common.Project) error {
 		}
 		region := ""
 		if dsk.IsRegional {
-			region = dset.Template.Region
+			region = dsk.Region
 		}
 		dt, err := getDiskType(db, dsk.DiskType, region)
 		dset.Template.Type = &common.DiskType{

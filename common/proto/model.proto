@@ -5,6 +5,20 @@ option go_package = ".;resources";
 
 import "google/protobuf/any.proto";
 
+// Location says where in the world you want a resource to be located.
+// You do not have to specify a location, though having at least the
+// global_region or the continent is helpful.
+// If you specify more than one field, they need to be consistent.
+// If you specify a country, you will only be able to see costs for providers
+// serving that country. If you wish to specify a particular location only for
+// particular providers, you need to select the correct region/zone in the
+// provider details instead.
+message Location {
+  string global_region = 1; // APAC, EMEA, LATAM, NAM
+  string continent = 2; // Asia, Africa, Australia, Europe, NorthAmerica, SouthAmerica
+  string country_code = 3;  // ISO 2-letter country code
+}
+
 message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
@@ -18,15 +32,27 @@ message DiskType {
 
 message Image {
   uint32 size_gb = 1;
-  string region = 2;
+  Location location = 2;
+  map<string, google.protobuf.Any> provider_details = 3;
 }
 
 message VM {
-  string zone = 1;
-  string region = 2;
-  MachineType type = 3;
-  // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 4;
+  Location location = 1;
+  MachineType type = 2;
+  // You can have one detail per provider. The common VM is a spec; the provider
+  // details should meet the spec.
+  // If you fill in provider details, they need to meet the spec, otherwise the
+  // system will complain.
+  // If you only supply the spec and ask the system to fill in provider details,
+  // it will attempt to find a match for the spec. This will fail if the provider
+  // does not offer anything matching (e.g. if you ask for a country that the
+  // provider does not serve). Otherwise, it will select the smallest machine type
+  // offered by the provider in the location you specified that meets your spec.
+  // If there are several such machine types (e.g. there are matches from both
+  // gcloud's n2 and e2 series), there is a provider-specific ranking of which
+  // machine types the system prefers, based on what is considered "generally most
+  // cost effective" (but note this is just a heuristic).
+  map<string, google.protobuf.Any> provider_details = 3;
 }
 
 // VMs with the same region and type
@@ -39,16 +65,15 @@ message VMSet {
 }
 
 message Disk {
-  string zone = 1;
-  string region = 2;
-  DiskType type = 3; 
+  Location location = 1;
+  DiskType type = 2; 
   // the size in the disk type is the maximum size for the disk.
-  uint64 actual_size_gb = 4;
+  uint64 actual_size_gb = 3;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 5;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
-// Disks with the same region, type, and size
+// Disks with the same location, type, and size
 message DiskSet {
   Disk template = 2;
   uint32 count = 3;
@@ -59,7 +84,7 @@ message DiskSet {
 
 message Subnetwork {
   string name = 1;
-  string region = 2;
+  Location location = 2;
   // for cost estimate: total gbits per month per subnetwork
   // Note that there are provider-specific caps and quota settings
   // that may apply and cause your effective bandwidth to be lower.
