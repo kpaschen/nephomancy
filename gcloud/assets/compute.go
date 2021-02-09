@@ -3,8 +3,8 @@ package assets
 import (
 	"context"
 	"fmt"
-	"strings"
 	"google.golang.org/api/compute/v1"
+	"strings"
 )
 
 func ListRegions(project string) ([]string, error) {
@@ -26,10 +26,10 @@ func ListRegions(project string) ([]string, error) {
 			state := t.Deprecated.State
 			if state == "ACTIVE" || state == "DEPRECATED" {
 				fmt.Printf("region %s is going to be deprecated.\n",
-				t.Name)
+					t.Name)
 			} else {
 				fmt.Printf("region %s has been deprecated\n",
-				t.Name)
+					t.Name)
 			}
 			continue
 		}
@@ -57,11 +57,11 @@ func ListZones(project string) ([]RegionZone, error) {
 		rt := make([]RegionZone, len(resp.Items))
 		for idx, t := range resp.Items {
 			x := strings.Split(t.Region, "/")
-                        region := x[len(x)-1]
+			region := x[len(x)-1]
 			if region != "" && t.Name != "" {
 				rt[idx] = RegionZone{
 					Region: region,
-					Zone: t.Name,
+					Zone:   t.Name,
 				}
 			}
 		}
@@ -98,15 +98,15 @@ func ListMachineTypes(project string, zone string) ([]MachineType, error) {
 			at := make([]AcceleratorType, len(t.Accelerators))
 			for id2, a := range t.Accelerators {
 				at[id2] = AcceleratorType{
-					Name: a.GuestAcceleratorType,
+					Name:  a.GuestAcceleratorType,
 					Count: a.GuestAcceleratorCount,
 				}
 			}
 			rt[idx] = MachineType{
-				CpuCount: uint32(t.GuestCpus),
-				IsSharedCpu: shared,
-				MemoryMb: uint64(t.MemoryMb),
-				Name: t.Name,
+				CpuCount:     uint32(t.GuestCpus),
+				IsSharedCpu:  shared,
+				MemoryMb:     uint64(t.MemoryMb),
+				Name:         t.Name,
 				Accelerators: at,
 			}
 		}
@@ -137,7 +137,7 @@ func ListDiskTypes(project string, zone string) ([]DiskType, error) {
 		rt := make([]DiskType, len(resp.Items))
 		for idx, t := range resp.Items {
 			rt[idx] = DiskType{
-				Name: t.Name,
+				Name:          t.Name,
 				DefaultSizeGb: t.DefaultDiskSizeGb,
 			}
 		}
@@ -168,9 +168,9 @@ func ListRegionDiskTypes(project string, region string) ([]DiskType, error) {
 		rt := make([]DiskType, len(resp.Items))
 		for idx, t := range resp.Items {
 			rt[idx] = DiskType{
-				Name: t.Name,
+				Name:          t.Name,
 				DefaultSizeGb: t.DefaultDiskSizeGb,
-				Region: region,
+				Region:        region,
 			}
 		}
 		ret = append(ret, rt...)
@@ -194,7 +194,7 @@ func GetProject(project string) error {
 		return err
 	}
 	for _, q := range resp.Quotas {
-		qu, err  := q.MarshalJSON()
+		qu, err := q.MarshalJSON()
 		if err != nil {
 			return err
 		}
@@ -271,4 +271,3 @@ func ListInstances(project string) error {
 	}
 	return nil
 }
-

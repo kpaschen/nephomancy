@@ -40,8 +40,8 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 				return nil, berr
 			}
 			rt[idx] = SmallAsset{
-				Name: a.Name,
-				AssetType: a.AssetType,
+				Name:           a.Name,
+				AssetType:      a.AssetType,
 				ResourceAsJson: string(by),
 			}
 		}

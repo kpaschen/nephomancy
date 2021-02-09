@@ -3,8 +3,8 @@ package command
 import (
 	"fmt"
 	"log"
-	"strings"
 	"nephomancy/gcloud/assets"
+	"strings"
 )
 
 type ServicesCommand struct {
@@ -45,7 +45,6 @@ func (c *ServicesCommand) Run(args []string) int {
 		log.Fatalf("Failed to get regions: %v", err)
 	}
 	fmt.Printf("regions: %v", regions)
-
 
 	err = assets.ListServices(projectPath)
 	if err != nil {

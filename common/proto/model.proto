@@ -23,10 +23,12 @@ message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
+  // Probably want something like preemptibility and sole tenancy here as well.
 }
 
 message DiskType {
   uint32 size_gb = 1;
+  string disk_tech = 2;  // SSD or Standard
   // need an enum or a flag for whether this is replicated.
 }
 

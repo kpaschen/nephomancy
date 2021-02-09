@@ -2,11 +2,11 @@ package assets
 
 import (
 	"fmt"
-	"strings"
+	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
-	"github.com/golang/protobuf/ptypes"
 	common "nephomancy/common/resources"
+	"strings"
 )
 
 const GcloudProvider = "gcloud"
@@ -24,9 +24,9 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 // containing lists of vm sets, disk sets, and images.
 func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	p := &common.Project{
-		VmSets: make([]*common.VMSet, 0),
+		VmSets:   make([]*common.VMSet, 0),
 		DiskSets: make([]*common.DiskSet, 0),
-		Images: make([]*common.Image, 0),
+		Images:   make([]*common.Image, 0),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -46,71 +46,88 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			if err = addVMToProject(p, vm); err != nil {
 				return nil, err
 			}
-		case "Disk": {
-			d, err := createDisk(as, false)
-			if err != nil {
-				return nil, err
+		case "Disk":
+			{
+				d, err := createDisk(as, false)
+				if err != nil {
+					return nil, err
+				}
+				if err = addDiskToProject(p, d); err != nil {
+					return nil, err
+				}
 			}
-			if err = addDiskToProject(p, d); err != nil {
-				return nil, err
+		case "RegionDisk":
+			{
+				d, err := createDisk(as, true)
+				if err != nil {
+					return nil, err
+				}
+				if err = addDiskToProject(p, d); err != nil {
+					return nil, err
+				}
 			}
-		}
-		case "RegionDisk": {
-			d, err := createDisk(as, true)
-			if err != nil {
-				return nil, err
+		case "Image":
+			{
+				img, err := createImage(as)
+				if err != nil {
+					return nil, err
+				}
+				if err = addImageToProject(p, img); err != nil {
+					return nil, err
+				}
 			}
-			if err = addDiskToProject(p, d); err != nil {
-				return nil, err
+		case "Project":
+			{
+				// There are two project resources, one for the actual
+				// project and one for its parent. They have the project
+				// name in different fields.
+				err := as.ensureResourceMap()
+				if err != nil {
+					return nil, err
+				}
+				name, _ := as.resourceMap["projectId"].(string)
+				if name != "" {
+					p.Name = name
+				}
 			}
-		}
-		case "Image": {
-			img, err := createImage(as)
-			if err != nil {
-				return nil, err
+		case "Firewall":
+			{
 			}
-			if err = addImageToProject(p, img); err != nil {
-				return nil, err
+		case "Route":
+			{
 			}
-		}
-		case "Project": {
-			// There are two project resources, one for the actual
-			// project and one for its parent. They have the project
-			// name in different fields.
-			err := as.ensureResourceMap()
-			if err != nil {
-				return nil, err
+		case "Network":
+			{
+				nw, err := createNetwork(as)
+				if err != nil {
+					return nil, err
+				}
+				if err = addNetworkToProject(p, nw); err != nil {
+					return nil, err
+				}
 			}
-			name, _ := as.resourceMap["projectId"].(string)
-			if name != "" {
-				p.Name = name
+		case "Subnetwork":
+			{
+				snw, err := createSubnetwork(as)
+				if err != nil {
+					return nil, err
+				}
+				nwName, _ := as.networkName()
+				if err = addSubnetworkToProject(p, snw, nwName); err != nil {
+					return nil, err
+				}
 			}
-		}
-	        case "Firewall": {}
-	        case "Route": {}
-		case "Network": {
-			nw, err := createNetwork(as)
-			if err != nil {
-				return nil, err
+		case "Service":
+			{
 			}
-			if err = addNetworkToProject(p, nw); err != nil {
-				return nil, err
+		case "ServiceAccount":
+			{
 			}
-		}
-		case "Subnetwork": {
-			snw, err := createSubnetwork(as)
-			if err != nil {
-				return nil, err
+		case "ServiceAccountKey":
+			{
 			}
-			nwName, _ := as.networkName()
-			if err = addSubnetworkToProject(p, snw, nwName); err != nil {
-				return nil, err
-			}
-		}
-		case "Service": {}
-		case "ServiceAccount": {}
-		case "ServiceAccountKey": {}
-		default: fmt.Printf("type %s not handled yet\n", bt)
+		default:
+			fmt.Printf("type %s not handled yet\n", bt)
 		}
 	}
 	if err := pruneSubnetworks(p); err != nil {
@@ -141,7 +158,7 @@ func SubnetworkRegionTier(subnetwork common.Subnetwork) (region string, tier str
 	var gsnw GCloudSubnetwork
 	if err := ptypes.UnmarshalAny(
 		subnetwork.ProviderDetails[GcloudProvider], &gsnw); err != nil {
-			return "", "", err
+		return "", "", err
 	}
 	return gsnw.Region, gsnw.Tier, nil
 }
@@ -152,7 +169,7 @@ func vmNetworkTier(vm common.VM) (string, error) {
 		vm.ProviderDetails[GcloudProvider], &gvm); err != nil {
 		return "", err
 	}
-        if gvm.NetworkTier == "" {
+	if gvm.NetworkTier == "" {
 		return "STANDARD", nil
 	}
 	return gvm.NetworkTier, nil
@@ -194,7 +211,7 @@ func addSubnetworkToProject(p *common.Project, snw *common.Subnetwork, networkNa
 		}
 	}
 	nw := &common.Network{
-		Name: networkName,
+		Name:        networkName,
 		Subnetworks: make([]*common.Subnetwork, 1),
 	}
 	nw.Subnetworks[0] = snw
@@ -290,7 +307,7 @@ func addVMToProject(p *common.Project, vm *common.VM) error {
 	// No vmset with the given fingerprint yet
 	vset := common.VMSet{
 		Template: vm,
-		Count: 1,
+		Count:    1,
 	}
 	p.VmSets = append(p.VmSets, &vset)
 	return nil
@@ -317,10 +334,10 @@ func createVM(a SmallAsset) (*common.VM, error) {
 
 	details, err := ptypes.MarshalAny(&GCloudVM{
 		MachineType: machineType,
-		Scheduling: scheduling,
+		Scheduling:  scheduling,
 		NetworkTier: networkTier,
-		Region: region,
-		Zone: zone,
+		Region:      region,
+		Zone:        zone,
 	})
 	if err != nil {
 		return nil, err
@@ -332,7 +349,7 @@ func createVM(a SmallAsset) (*common.VM, error) {
 		},
 	}
 
-        return &ret, nil
+	return &ret, nil
 }
 
 func addDiskToProject(p *common.Project, dsk *common.Disk) error {
@@ -350,7 +367,7 @@ func addDiskToProject(p *common.Project, dsk *common.Disk) error {
 	// No disk set with the given fingerprint yet
 	dset := common.DiskSet{
 		Template: dsk,
-		Count: 1,
+		Count:    1,
 	}
 	p.DiskSets = append(p.DiskSets, &dset)
 	return nil
@@ -391,10 +408,10 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 	zone, _ := a.zone()
 	diskType, _ := a.diskType()
 	details, err := ptypes.MarshalAny(&GCloudDisk{
-		DiskType: diskType,
+		DiskType:   diskType,
 		IsRegional: isRegional,
-		Region: regions[0],
-		Zone: zone,
+		Region:     regions[0],
+		Zone:       zone,
 	})
 	if err != nil {
 		return nil, err
@@ -430,4 +447,3 @@ func addImageToProject(p *common.Project, img *common.Image) error {
 	p.Images = append(p.Images, img)
 	return nil
 }
-

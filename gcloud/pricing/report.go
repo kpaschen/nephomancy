@@ -6,10 +6,10 @@ import (
 )
 
 var header = []string{"resource type", "count", "spec",
-"max usage", "max cost", "projected usage", "projected cost"}
+	"max usage", "max cost", "projected usage", "projected cost"}
 
 type CostReporter struct {
-	file *os.File
+	file   *os.File
 	writer *csv.Writer
 }
 

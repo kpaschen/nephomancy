@@ -4,15 +4,15 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"github.com/kennygrant/sanitize"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io/ioutil"
 	"log"
+	common "nephomancy/common/resources"
+	"nephomancy/gcloud/assets"
 	"os"
 	"path/filepath"
 	"strings"
-	common "nephomancy/common/resources"
-	"nephomancy/gcloud/assets"
-	"github.com/kennygrant/sanitize"
 )
 
 const projectDoc = `ID of a gcloud project. The user you are authenticating as must have access to this project. The billing, compute, asset, and monitoring APIs must be enabled for this project, and your user must be authorized to use them.`
@@ -127,7 +127,7 @@ func (c *Command) ProjectOutFile(fallback string) (string, error) {
 		fname = fallback
 	}
 	outfile := sanitize.Name(fname)
-	wd, err  := c.WorkingDir()
+	wd, err := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +144,7 @@ func (c *Command) CostReportFile(fallback string) (string, error) {
 	if len(parts) <= 1 || parts[len(parts)-1] != "csv" {
 		outfile += ".csv"
 	}
-	wd, err  := c.WorkingDir()
+	wd, err := c.WorkingDir()
 	if err != nil {
 		return "", err
 	}
@@ -208,7 +208,7 @@ func (c *Command) saveProject(p *common.Project) error {
 	}
 	options := protojson.MarshalOptions{
 		Multiline: true,
-		Indent: "  ",
+		Indent:    "  ",
 	}
 	f.WriteString(options.Format(p))
 	log.Printf("Project %s saved to file %s\n", p.Name, outfile)

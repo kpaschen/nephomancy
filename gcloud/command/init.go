@@ -3,8 +3,8 @@ package command
 import (
 	"fmt"
 	"log"
-	"strings"
 	"nephomancy/gcloud/cache"
+	"strings"
 )
 
 type InitCommand struct {
@@ -35,7 +35,7 @@ func (*InitCommand) Help() string {
 			     and for which the relevant APIs are enabled. The user you are authenticated
 			     as must have access to the project.
 `
-        return strings.TrimSpace(helpText)
+	return strings.TrimSpace(helpText)
 }
 
 func (*InitCommand) Synopsis() string {

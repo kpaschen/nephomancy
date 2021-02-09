@@ -3,11 +3,10 @@ package pricing
 import (
 	"database/sql"
 	"fmt"
+	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
 	"nephomancy/gcloud/cache"
-	common "nephomancy/common/resources"
 )
-
 
 func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	costs := make([][]string, 0)
@@ -84,7 +83,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 
 func getTotalsForRate(
 	price cache.PricingInfo, maxUsage uint64, expectedUsage uint64) (
-		maxCost float64, expectedCost float64, err error) {
+	maxCost float64, expectedCost float64, err error) {
 	conversionRate := 1.0
 	if price.CurrencyConversionRate != 1.0 {
 		conversionRate = float64(price.CurrencyConversionRate)
@@ -97,10 +96,10 @@ func getTotalsForRate(
 	length := len(pe.TieredRates)
 	for i, r := range pe.TieredRates {
 		if r.Nanos == 0 {
-			continue  // freebies have no nanos
+			continue // freebies have no nanos
 		}
 		unitPrice := (float64(r.Units) * float64(r.Nanos)) / 1000000000.0
-		if i < length - 1 {
+		if i < length-1 {
 			interval := uint64(pe.TieredRates[i+1].StartUsageAmount - r.StartUsageAmount)
 			if maxRemaining > 0 {
 				if maxRemaining < interval {
@@ -142,9 +141,9 @@ func getTotalsForRate(
 }
 
 func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork,
-                         ingress bool, external bool,
-			 pricing map[string](cache.PricingInfo)) (
-				 []string, error) {
+	ingress bool, external bool,
+	pricing map[string](cache.PricingInfo)) (
+	[]string, error) {
 	var usage uint64
 	resourceName := ""
 	region, _, _ := assets.SubnetworkRegionTier(subnetwork)
@@ -154,11 +153,11 @@ func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork,
 	} else if external {
 		usage = subnetwork.ExternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("external egress traffic from %s",
-		region)
+			region)
 	} else {
 		usage = subnetwork.InternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("internal egress traffic from %s",
-		region)
+			region)
 	}
 	// There can be several different prices depending on the regions involved,
 	// just use the highest.
@@ -252,13 +251,13 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 
 func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([][]string, error) {
 	/*
-	var gvm assets.GCloudVM
-	if err := ptypes.UnmarshalAny(
-		vm.Template.ProviderDetails[assets.GcloudProvider],
-		&gvm); err != nil {
-		return nil, err
-	}
-	_ = gvm
+		var gvm assets.GCloudVM
+		if err := ptypes.UnmarshalAny(
+			vm.Template.ProviderDetails[assets.GcloudProvider],
+			&gvm); err != nil {
+			return nil, err
+		}
+		_ = gvm
 	*/
 	// TODO: should use actual numbers from the provider details
 	cpuCount := vm.Template.Type.CpuCount
@@ -271,7 +270,7 @@ func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingI
 	for skuId, price := range pricing {
 		pe := price.PricingExpression
 		resourceName := ""
-		if pe.UsageUnit == "h" {  // cpu hours
+		if pe.UsageUnit == "h" { // cpu hours
 			maxUsage = uint64(30 * 24 * cpuCount * vmCount)
 			projectedUsage = uint64(usage * cpuCount * vmCount)
 			resourceName = "cpu"
@@ -281,7 +280,7 @@ func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingI
 			resourceName = "memory"
 		} else {
 			return nil, fmt.Errorf("sku %s has unknown usage unit %s",
-			skuId, pe.UsageUnit)
+				skuId, pe.UsageUnit)
 		}
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
 		if err != nil {
