@@ -14,37 +14,37 @@ import (
 
 type BillingService struct {
 	BusinessEntityName string
-	DisplayName string
-	Name string
-	ServiceID string
+	DisplayName        string
+	Name               string
+	ServiceID          string
 }
 
 type skuCategory struct {
-	ResourceFamily string
-	ResourceGroup string
-        ServiceDisplayName string
-	UsageType string
+	ResourceFamily     string
+	ResourceGroup      string
+	ServiceDisplayName string
+	UsageType          string
 }
 
 type PricingInfo struct {
-	EffectiveFrom int64
-	Summary string
+	EffectiveFrom          int64
+	Summary                string
 	CurrencyConversionRate float64
-	PricingExpression string
-        AggregationInfo string
+	PricingExpression      string
+	AggregationInfo        string
 }
 
 type BillingServiceSku struct {
-	Category *skuCategory
+	Category    *skuCategory
 	Description string
 	// TYPE_UNSPECIFIED, GLOBAL, REGIONAL or MULTI_REGIONAL
-	GeoTaxonomyType string
-	GeoTaxonomyRegions string
-	Name string
-	PricingInfo []PricingInfo
+	GeoTaxonomyType     string
+	GeoTaxonomyRegions  string
+	Name                string
+	PricingInfo         []PricingInfo
 	ServiceProviderName string
-	ServiceRegions []string
-	SkuId string
+	ServiceRegions      []string
+	SkuId               string
 }
 
 func ListBillingServices() (map[string]BillingService, error) {
@@ -67,9 +67,9 @@ func ListBillingServices() (map[string]BillingService, error) {
 		for _, s := range resp.Services {
 			ret[s.DisplayName] = BillingService{
 				BusinessEntityName: s.BusinessEntityName,
-				DisplayName: s.DisplayName,
-				Name: s.Name,
-				ServiceID: s.ServiceId,
+				DisplayName:        s.DisplayName,
+				Name:               s.Name,
+				ServiceID:          s.ServiceId,
 			}
 		}
 		if resp.NextPageToken == "" {
@@ -107,10 +107,10 @@ func ListSkus(billingServiceName *string) (map[string]BillingServiceSku, error) 
 		}
 		for _, s := range resp.Skus {
 			cat := skuCategory{
-				ResourceFamily: s.Category.ResourceFamily,
-				ResourceGroup: s.Category.ResourceGroup,
+				ResourceFamily:     s.Category.ResourceFamily,
+				ResourceGroup:      s.Category.ResourceGroup,
 				ServiceDisplayName: s.Category.ServiceDisplayName,
-				UsageType: s.Category.UsageType,
+				UsageType:          s.Category.UsageType,
 			}
 			gtType := ""
 			gtRegions := ""
@@ -118,8 +118,8 @@ func ListSkus(billingServiceName *string) (map[string]BillingServiceSku, error) 
 				gtType = s.GeoTaxonomy.Type
 				gtRegions = strings.Join(s.GeoTaxonomy.Regions, ", ")
 			}
-			pInfo := make([]PricingInfo, 0, 5)
-			for _, p := range s.PricingInfo {
+			pInfo := make([]PricingInfo, len(s.PricingInfo))
+			for idx, p := range s.PricingInfo {
 				pBytes, err := p.PricingExpression.MarshalJSON()
 				if err != nil {
 					return nil, err
@@ -137,24 +137,24 @@ func ListSkus(billingServiceName *string) (map[string]BillingServiceSku, error) 
 					return nil, err
 				}
 				timestamp := ts.Unix()
-				pInfo = append(pInfo, PricingInfo{
-					EffectiveFrom: timestamp,
-					Summary: p.Summary,
-					PricingExpression: string(pBytes),
-					AggregationInfo: aggregationInfo,
+				pInfo[idx] = PricingInfo{
+					EffectiveFrom:          timestamp,
+					Summary:                p.Summary,
+					PricingExpression:      string(pBytes),
+					AggregationInfo:        aggregationInfo,
 					CurrencyConversionRate: p.CurrencyConversionRate,
-				})
+				}
 			}
 			ret[s.Name] = BillingServiceSku{
-				Category: &cat,
-				Description: s.Description,
-				GeoTaxonomyType: gtType,
-				GeoTaxonomyRegions: gtRegions,
-				Name: s.Name,
+				Category:            &cat,
+				Description:         s.Description,
+				GeoTaxonomyType:     gtType,
+				GeoTaxonomyRegions:  gtRegions,
+				Name:                s.Name,
 				ServiceProviderName: s.ServiceProviderName,
-				SkuId: s.SkuId,
-				PricingInfo: pInfo,
-				ServiceRegions: s.ServiceRegions,
+				SkuId:               s.SkuId,
+				PricingInfo:         pInfo,
+				ServiceRegions:      s.ServiceRegions,
 			}
 		}
 		if resp.NextPageToken == "" {

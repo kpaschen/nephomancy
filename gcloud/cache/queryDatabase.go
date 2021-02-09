@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes"
 	"log"
-	"strings"
+	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
-        common "nephomancy/common/resources"
+	"strings"
 	// concrete db driver even though the code only refers to interface.
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -42,7 +42,7 @@ func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error)
 		tieredRates := make([]Rate, 0)
 		for res.Next() {
 			err = res.Scan(&currencyConversionRate, &aggregationInfo,
-		&usageUnit, &currencyCode, &nanos, &units, &startUsageAmount)
+				&usageUnit, &currencyCode, &nanos, &units, &startUsageAmount)
 			if err != nil {
 				log.Printf("error scanning row: %v\n", err)
 				continue
@@ -50,7 +50,7 @@ func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error)
 			if pi == nil {
 				pi = &PricingInfo{
 					CurrencyConversionRate: currencyConversionRate,
-					AggregationInfo: aggregationInfo,
+					AggregationInfo:        aggregationInfo,
 					PricingExpression: &Pricing{
 						UsageUnit: usageUnit,
 					},
@@ -58,10 +58,10 @@ func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error)
 
 			}
 			rate := Rate{
-				CurrencyCode: currencyCode,
-				Nanos: nanos,
+				CurrencyCode:     currencyCode,
+				Nanos:            nanos,
 				StartUsageAmount: startUsageAmount,
-				Units: units,
+				Units:            units,
 			}
 			tieredRates = append(tieredRates, rate)
 
@@ -82,7 +82,7 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 		fmt.Fprintf(querySku, " AND ServiceRegions.Region IN (")
 		rcount := len(regions)
 		for i, r := range regions {
-			if i == rcount - 1 {
+			if i == rcount-1 {
 				fmt.Fprintf(querySku, "'%s'", r)
 			} else {
 				fmt.Fprintf(querySku, "'%s',", r)
@@ -93,13 +93,13 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 }
 
 func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
-	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{vm.Region})
 	var gvm assets.GCloudVM
 	err := ptypes.UnmarshalAny(vm.ProviderDetails[assets.GcloudProvider], &gvm)
 	if err != nil {
 		return nil, err
 	}
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{gvm.Region})
 	if gvm.Scheduling != "" {
 		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", gvm.Scheduling)
 	}
@@ -116,24 +116,27 @@ func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
 		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	}
 	fmt.Fprintf(&querySku, ";")
+	fmt.Printf("instance sku query: %s\n", querySku.String())
 	return getSkusForQuery(db, querySku.String())
 }
 
 func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
-	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{disk.Region})
 
 	var gd assets.GCloudDisk
 	err := ptypes.UnmarshalAny(disk.ProviderDetails[assets.GcloudProvider], &gd)
 	if err != nil {
 		return nil, err
 	}
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
 	diskType := gd.DiskType
 	resourceGroup := ""
 	switch diskType {
 	case "pd-standard":
 		resourceGroup = "PDStandard"
-	case "ssd":
+	case "pd-ssd":
+		resourceGroup = "SSD"
+	case "pd-balanced":
 		resourceGroup = "SSD"
 	default:
 		log.Fatalf("Unknown disk type %s in completeDiskQuery\n", diskType)
@@ -152,8 +155,13 @@ func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
 }
 
 func GetSkusForImage(db *sql.DB, image common.Image) ([]string, error) {
+	var gi assets.GCloudImage
+	err := ptypes.UnmarshalAny(image.ProviderDetails[assets.GcloudProvider], &gi)
+	if err != nil {
+		return nil, err
+	}
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gi.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }

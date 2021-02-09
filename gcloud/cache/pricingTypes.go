@@ -32,8 +32,8 @@ type Pricing struct {
 
 type PricingInfo struct {
 	CurrencyConversionRate float32
-	PricingExpression *Pricing
-	AggregationInfo string
+	PricingExpression      *Pricing
+	AggregationInfo        string
 }
 
 func (pricingInfo *PricingInfo) AggregationLevel() (string, error) {
@@ -107,16 +107,16 @@ func FromJson(pricingExpression *string) (*Pricing, error) {
 			startUsageAmount = int64(freebie)
 		}
 		tieredRates = append(tieredRates, Rate{
-			CurrencyCode: currencyCode,
-			Nanos: nanos,
-			Units: unit,
+			CurrencyCode:     currencyCode,
+			Nanos:            nanos,
+			Units:            unit,
 			StartUsageAmount: startUsageAmount,
 		})
 	}
 	return &Pricing{
-		BaseUnit: baseUnit,
-                BaseUnitConversionFactor: conversionFactor,
-		UsageUnit: usageUnit,
-		TieredRates: tieredRates,
+		BaseUnit:                 baseUnit,
+		BaseUnitConversionFactor: conversionFactor,
+		UsageUnit:                usageUnit,
+		TieredRates:              tieredRates,
 	}, nil
 }

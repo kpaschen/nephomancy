@@ -3,8 +3,9 @@ package command
 import (
 	"fmt"
 	"log"
-	"strings"
 	"nephomancy/gcloud/assets"
+	"nephomancy/gcloud/cache"
+	"strings"
 )
 
 type AssetsCommand struct {
@@ -45,6 +46,12 @@ func (c *AssetsCommand) Run(args []string) int {
 
 	projectName := c.Command.Project
 
+	db, err := c.DbHandle()
+	if err != nil {
+		log.Fatalf("Could not open database: %v\n", err)
+	}
+	defer c.CloseDb()
+
 	if project == nil {
 		if projectName == "" {
 			log.Fatalf("Need a project ID. You can see the IDs on the GCloud console.\n")
@@ -59,12 +66,15 @@ func (c *AssetsCommand) Run(args []string) int {
 			log.Fatalf("Building project failed: %v", err)
 		}
 		/*
-		err = assets.GetProject(projectName)
-		if err != nil {
-			log.Fatalf("Failed to get project: %v", err)
-		}
+			err = assets.GetProject(projectName)
+			if err != nil {
+				log.Fatalf("Failed to get project: %v", err)
+			}
 		*/
 		project = p
+	}
+	if err = cache.ReconcileSpecAndAssets(db, project); err != nil {
+		log.Fatalf("resolving project failed: %v", err)
 	}
 
 	if err = c.saveProject(project); err != nil {

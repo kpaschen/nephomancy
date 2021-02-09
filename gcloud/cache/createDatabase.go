@@ -1,6 +1,6 @@
 package cache
 
-import(
+import (
 	"database/sql"
 	"os"
 
@@ -181,7 +181,6 @@ func createResourceMetadataTables(db *sql.DB) error {
 	return nil
 }
 
-
 func createTable(db *sql.DB, ct *string) error {
 	stmt, err := db.Prepare(*ct)
 	if err != nil {
@@ -190,4 +189,3 @@ func createTable(db *sql.DB, ct *string) error {
 	_, err = stmt.Exec()
 	return err
 }
-

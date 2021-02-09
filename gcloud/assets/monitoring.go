@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/monitoring/apiv3"
-//	metricpb "google.golang.org/genproto/googleapis/api/metric"
-	monitoringpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	"google.golang.org/api/iterator"
+	//	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/api/iterator"
+	monitoringpb "google.golang.org/genproto/googleapis/monitoring/v3"
 )
 
 // code is here: https://godoc.org/cloud.google.com/go/monitoring/apiv3#pkg-files
@@ -26,12 +26,12 @@ func getMetricDescriptors(project string, metricType string, resourceType string
 	nextPageToken := ""
 	// filter := fmt.Sprintf(`metric.type=starts_with("%s")`, "networking.googleapis.com")
 	filter := fmt.Sprintf(`metric.type=starts_with("%s") AND resource.type=starts_with("%s")`,
-	metricType, resourceType)
+		metricType, resourceType)
 	for {
 		req := &monitoringpb.ListMetricDescriptorsRequest{
-			Name: project,
-			Filter: filter,
-			PageSize: 100,
+			Name:      project,
+			Filter:    filter,
+			PageSize:  100,
 			PageToken: nextPageToken,
 		}
 		it := client.ListMetricDescriptors(ctx, req)
@@ -68,14 +68,14 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 			Seconds: now,
 		},
 		StartTime: &timestamppb.Timestamp{
-			Seconds: now-60,
+			Seconds: now - 60,
 		},
 	}
 	filter := fmt.Sprintf(`metric.type=starts_with("%s") AND resource.type=starts_with("%s")`,
-	metricType, resourceType)
+		metricType, resourceType)
 	req := &monitoringpb.ListTimeSeriesRequest{
-		Name: project,
-		Filter: filter,
+		Name:     project,
+		Filter:   filter,
 		Interval: interval,
 		Aggregation: &monitoringpb.Aggregation{
 			CrossSeriesReducer: monitoringpb.Aggregation_REDUCE_SUM,
@@ -97,11 +97,11 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 
 func ListMetrics(project string) error {
 	err := getMetricDescriptors(project,
-	"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
+		"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
 	if err != nil {
 		return err
 	}
 	err = getTimeSeries(project,
-	"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
+		"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
 	return nil
 }

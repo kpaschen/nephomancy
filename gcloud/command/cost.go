@@ -3,10 +3,10 @@ package command
 import (
 	"fmt"
 	"log"
-	"strings"
 	"nephomancy/gcloud/assets"
-	pricing "nephomancy/gcloud/pricing"
 	"nephomancy/gcloud/cache"
+	pricing "nephomancy/gcloud/pricing"
+	"strings"
 )
 
 type CostCommand struct {
@@ -74,7 +74,7 @@ func (c *CostCommand) Run(args []string) int {
 		}
 		project = proj
 	}
-	err = cache.AddResourceTypesToProject(db, project)
+	err = cache.ReconcileSpecAndAssets(db, project)
 	if err != nil {
 		log.Fatalf("Could not add resource types: %v", err)
 	}

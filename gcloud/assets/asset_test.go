@@ -35,7 +35,7 @@ func TestRegions(t *testing.T) {
 	r, err = a.regions()
 	if err != nil || len(r) != 2 {
 		t.Errorf("Expected to get two regions but got %v with len %d, %v\n",
-		r, len(r), err)
+			r, len(r), err)
 	}
 	if r[0] != "europe-west2" || r[1] != "northamerica-east1" {
 		t.Errorf("Expected to get europe-west2 and northamerica-east1 but got %v\n", r)
@@ -57,7 +57,7 @@ func TestScheduling(t *testing.T) {
 	scheduling, err := a.scheduling()
 	if err != nil || scheduling != "Preemptible" {
 		t.Errorf("Expected scheduling to be preemptible but got %s, %v\n",
-		scheduling, err)
+			scheduling, err)
 	}
 	dMap = map[string]interface{}{
 		"data": map[string]interface{}{
@@ -73,7 +73,7 @@ func TestScheduling(t *testing.T) {
 	scheduling, err = a.scheduling()
 	if err != nil || scheduling != "OnDemand" {
 		t.Errorf("Expected scheduling to be OnDemand but got %s, %v\n",
-		scheduling, err)
+			scheduling, err)
 	}
 	dMap = map[string]interface{}{
 		"data": map[string]interface{}{
@@ -89,6 +89,6 @@ func TestScheduling(t *testing.T) {
 	scheduling, err = a.scheduling()
 	if err != nil || scheduling != "" {
 		t.Errorf("Expected scheduling to be empty but got %s, %v\n",
-		scheduling, err)
+			scheduling, err)
 	}
 }

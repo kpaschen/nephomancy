@@ -7,25 +7,25 @@ import (
 
 type RegionZone struct {
 	Region string
-	Zone string
+	Zone   string
 }
 
 type AcceleratorType struct {
-	Name string
+	Name  string
 	Count int64
 }
 
 type MachineType struct {
-	Name string
-	CpuCount uint32
-	MemoryMb uint64
-	IsSharedCpu bool
+	Name         string
+	CpuCount     uint32
+	MemoryMb     uint64
+	IsSharedCpu  bool
 	Accelerators []AcceleratorType
 }
 
 type DiskType struct {
-	Name string
-	Region string  // if this is set, it's a regional disk
+	Name   string
+	Region string // if this is set, it's a regional disk
 	// TODO: what about zone for zonal disks?
 	DefaultSizeGb int64
 }
@@ -52,17 +52,29 @@ func MaxBandwidthGbps(m string, ingress bool, external bool) int32 {
 	parts := strings.Split(m, "-")
 	cpuCount, _ := strconv.Atoi(parts[2])
 	if parts[0] == "n1" {
-		if cpuCount == 1 { return 2 }
-		if cpuCount <= 4 { return 10 }
-		if cpuCount <= 8 { return 16 }
-		return 32  // it's only 16 if using a cpu before skylake actually
+		if cpuCount == 1 {
+			return 2
+		}
+		if cpuCount <= 4 {
+			return 10
+		}
+		if cpuCount <= 8 {
+			return 16
+		}
+		return 32 // it's only 16 if using a cpu before skylake actually
 	}
 	if parts[0] == "n2" || parts[0] == "n2d" {
-		if cpuCount <= 4 { return 10 }
-		if cpuCount <= 8 { return 16 }
+		if cpuCount <= 4 {
+			return 10
+		}
+		if cpuCount <= 8 {
+			return 16
+		}
 		return 32
 	}
 	max := 2 * cpuCount
-	if max > 16 { return 16 }
+	if max > 16 {
+		return 16
+	}
 	return int32(max)
 }

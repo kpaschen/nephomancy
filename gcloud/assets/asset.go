@@ -9,26 +9,26 @@ import (
 
 // This is a reduced version of the asset proto
 type SmallAsset struct {
-        Name string
-        AssetType string
-        ResourceAsJson string
-	resourceMap map[string]interface{}  // parsed version of ResourceAsJson
+	Name           string
+	AssetType      string
+	ResourceAsJson string
+	resourceMap    map[string]interface{} // parsed version of ResourceAsJson
 }
 
 func (a *SmallAsset) storageSize() (int64, error) {
 	if err := a.ensureResourceMap(); err != nil {
-                return 0, err
-        }
+		return 0, err
+	}
 	var diskSize int64
 	abytes, ok := a.resourceMap["archiveSizeBytes"].(string)
 	if ok {
 		diskSize, _ = strconv.ParseInt(abytes, 10, 64)
 		// The archive size gets reported as 4419062592 for a 4.12 GB image.
-		diskSize = diskSize / (1024 * 1024 * 1024)  // Should this be 1000?
+		diskSize = diskSize / (1024 * 1024 * 1024) // Should this be 1000?
 	} else {
 		gbytes, ok := a.resourceMap["sizeGb"].(string)
 		if ok {
-			diskSize, _ =  strconv.ParseInt(gbytes, 10, 64)
+			diskSize, _ = strconv.ParseInt(gbytes, 10, 64)
 		} else {
 			return 0, fmt.Errorf("unable to determine storage size for asset %+v", a)
 		}
@@ -52,7 +52,7 @@ func (a *SmallAsset) ensureResourceMap() error {
 		theMap, ok := rm["data"].(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("expected resource[data] to be another map but it is a %T",
-			rm["data"])
+				rm["data"])
 		}
 		a.resourceMap = theMap
 	}
@@ -64,18 +64,18 @@ func (a *SmallAsset) scheduling() (string, error) {
 		return "", err
 	}
 	if a.resourceMap["scheduling"] != nil {
-                scheduling, ok := a.resourceMap["scheduling"].(map[string]interface{})
-                if ok {
-                        preempt, ok := scheduling["preemptible"].(bool)
-                        // TODO: also support Commit1Yr etc
-                        if ok {
-                                if preempt {
+		scheduling, ok := a.resourceMap["scheduling"].(map[string]interface{})
+		if ok {
+			preempt, ok := scheduling["preemptible"].(bool)
+			// TODO: also support Commit1Yr etc
+			if ok {
+				if preempt {
 					return "Preemptible", nil
-                                }
+				}
 				return "OnDemand", nil
-                        }
-                }
-        }
+			}
+		}
+	}
 	return "", nil
 }
 
@@ -87,11 +87,11 @@ func (a *SmallAsset) machineType() (string, error) {
 		return "", nil
 	}
 	machineType, ok := a.resourceMap["machineType"].(string)
-        if !ok {
-	        return "", fmt.Errorf("expected machine type to be a string but it is a %T",
-		a.resourceMap["machineType"])
-        }
-        path := strings.Split(machineType, "/")
+	if !ok {
+		return "", fmt.Errorf("expected machine type to be a string but it is a %T",
+			a.resourceMap["machineType"])
+	}
+	path := strings.Split(machineType, "/")
 	return path[len(path)-1], nil
 }
 
@@ -105,7 +105,7 @@ func (a *SmallAsset) diskType() (string, error) {
 	diskType, ok := a.resourceMap["type"].(string)
 	if !ok {
 		return "", fmt.Errorf("expected disk type to be a string but it is a %T",
-		a.resourceMap["type"])
+			a.resourceMap["type"])
 	}
 	path := strings.Split(diskType, "/")
 	return path[len(path)-1], nil
@@ -136,27 +136,27 @@ func (a *SmallAsset) regions() ([]string, error) {
 		path := strings.Split(zone, "/")
 		z := path[len(path)-1]
 		// Now z is of the form <continent>-<direction><integer>-<char> like
-                // europe-west1-b. The region we need is z without the trailing char, so
-                // europe-west1. The other region value is 'global' but there is no zone for that
-                // in the resources afaik.
-                regions = append(regions, z[:len(z)-2])
+		// europe-west1-b. The region we need is z without the trailing char, so
+		// europe-west1. The other region value is 'global' but there is no zone for that
+		// in the resources afaik.
+		regions = append(regions, z[:len(z)-2])
 	} else {
-                if a.resourceMap["storageLocations"] != nil {
-                        loc, ok := a.resourceMap["storageLocations"].([]interface{})
-                        if !ok {
-                                fmt.Printf("expected sl to be a string array but it is a %T\n",
-                                a.resourceMap["storageLocations"])
-                                return nil, nil
-                        }
-                        for _, l := range loc {
-                                r, ok := l.(string)
-                                if !ok {
-                                        fmt.Printf("expected l to be a string but it is a %T\n", l)
-                                        return nil, nil
-                                }
+		if a.resourceMap["storageLocations"] != nil {
+			loc, ok := a.resourceMap["storageLocations"].([]interface{})
+			if !ok {
+				fmt.Printf("expected sl to be a string array but it is a %T\n",
+					a.resourceMap["storageLocations"])
+				return nil, nil
+			}
+			for _, l := range loc {
+				r, ok := l.(string)
+				if !ok {
+					fmt.Printf("expected l to be a string but it is a %T\n", l)
+					return nil, nil
+				}
 				regions = append(regions, r)
-                        }
-                }
+			}
+		}
 
 	}
 	return regions, nil
@@ -172,7 +172,7 @@ func (a *SmallAsset) networkName() (string, error) {
 	nw, ok := a.resourceMap["network"].(string)
 	if !ok {
 		return "None", fmt.Errorf("network entry was a %T not a string",
-		a.resourceMap["network"])
+			a.resourceMap["network"])
 	}
 	parts := strings.Split(nw, "/")
 	return parts[len(parts)-1], nil
@@ -188,7 +188,7 @@ func (a *SmallAsset) serviceAccountName() (string, error) {
 	n, ok := a.resourceMap["name"].(string)
 	if !ok {
 		return "None", fmt.Errorf("name was a %T not a string",
-		a.resourceMap["network"])
+			a.resourceMap["network"])
 	}
 	parts := strings.Split(n, "/")
 	// service account names have the form projects/<proj name>/serviceAccounts/<email>
@@ -198,4 +198,3 @@ func (a *SmallAsset) serviceAccountName() (string, error) {
 	}
 	return parts[3], nil
 }
-

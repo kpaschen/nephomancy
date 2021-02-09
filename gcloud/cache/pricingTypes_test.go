@@ -14,18 +14,18 @@ func TestFromJson(t *testing.T) {
 	pi, err := FromJson(&base)
 	if err != nil {
 		t.Errorf("Expected parsing of %s to work but got %v\n",
-		base, err)
+			base, err)
 	}
 	if pi.BaseUnitConversionFactor != 2875910101401600 {
 		t.Errorf("Misparsed base unit conversionfactor. Got %d expected %d\n",
-		pi.BaseUnitConversionFactor, 2875910101401600)
+			pi.BaseUnitConversionFactor, 2875910101401600)
 	}
 	if len(pi.TieredRates) != 2 {
 		t.Errorf("tiered rates: expected 2 but found %d\n",
-		len(pi.TieredRates))
+			len(pi.TieredRates))
 	}
 	if pi.TieredRates[1].Nanos != 40000000 {
 		t.Errorf("second tier rate should have nanos 40000000 but has %d\n",
-		pi.TieredRates[1].Nanos)
+			pi.TieredRates[1].Nanos)
 	}
 }

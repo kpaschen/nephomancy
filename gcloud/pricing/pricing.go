@@ -3,10 +3,10 @@ package pricing
 import (
 	"database/sql"
 	"fmt"
-	"nephomancy/gcloud/cache"
 	common "nephomancy/common/resources"
+	"nephomancy/gcloud/assets"
+	"nephomancy/gcloud/cache"
 )
-
 
 func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	costs := make([][]string, 0)
@@ -48,8 +48,9 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	for _, nw := range p.Networks {
 		ncosts := make([][]string, 3)
 		for _, snw := range nw.Subnetworks {
+			region, tier, _ := assets.SubnetworkRegionTier(*snw)
 			ingressSkus, _ := cache.GetSkusForIngress(
-				db, snw.Region, "PREMIUM")
+				db, region, tier)
 			pi, _ := cache.GetPricingInfo(db, ingressSkus)
 			// TODO: this needs to be done per load balancer
 			c1, err := subnetworkCostRange(db, *snw, true, true, pi)
@@ -58,7 +59,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			}
 			ncosts[0] = c1
 			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
-				db, snw.Region, "PREMIUM") // todo: tiers
+				db, region, tier)
 			pi, _ = cache.GetPricingInfo(db, externalEgressSkus)
 			c2, err := subnetworkCostRange(db, *snw, false, true, pi)
 			if err != nil {
@@ -66,7 +67,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			}
 			ncosts[1] = c2
 			internalEgressSkus, _ := cache.GetSkusForInternalEgress(
-				db, snw.Region)
+				db, region)
 			pi, _ = cache.GetPricingInfo(db, internalEgressSkus)
 			c3, err := subnetworkCostRange(db, *snw, false, false, pi)
 			if err != nil {
@@ -82,7 +83,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 
 func getTotalsForRate(
 	price cache.PricingInfo, maxUsage uint64, expectedUsage uint64) (
-		maxCost float64, expectedCost float64, err error) {
+	maxCost float64, expectedCost float64, err error) {
 	conversionRate := 1.0
 	if price.CurrencyConversionRate != 1.0 {
 		conversionRate = float64(price.CurrencyConversionRate)
@@ -95,10 +96,10 @@ func getTotalsForRate(
 	length := len(pe.TieredRates)
 	for i, r := range pe.TieredRates {
 		if r.Nanos == 0 {
-			continue  // freebies have no nanos
+			continue // freebies have no nanos
 		}
 		unitPrice := (float64(r.Units) * float64(r.Nanos)) / 1000000000.0
-		if i < length - 1 {
+		if i < length-1 {
 			interval := uint64(pe.TieredRates[i+1].StartUsageAmount - r.StartUsageAmount)
 			if maxRemaining > 0 {
 				if maxRemaining < interval {
@@ -140,22 +141,23 @@ func getTotalsForRate(
 }
 
 func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork,
-                         ingress bool, external bool,
-			 pricing map[string](cache.PricingInfo)) (
-				 []string, error) {
+	ingress bool, external bool,
+	pricing map[string](cache.PricingInfo)) (
+	[]string, error) {
 	var usage uint64
 	resourceName := ""
+	region, _, _ := assets.SubnetworkRegionTier(subnetwork)
 	if ingress {
 		usage = subnetwork.IngressGbitsPerMonth
-		resourceName = fmt.Sprintf("ingress traffic into %s", subnetwork.Region)
+		resourceName = fmt.Sprintf("ingress traffic into %s", region)
 	} else if external {
 		usage = subnetwork.ExternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("external egress traffic from %s",
-		subnetwork.Region)
+			region)
 	} else {
 		usage = subnetwork.InternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("internal egress traffic from %s",
-		subnetwork.Region)
+			region)
 	}
 	// There can be several different prices depending on the regions involved,
 	// just use the highest.
@@ -197,7 +199,7 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%d GB in %s", image.SizeGb, image.Region)
+		spec := fmt.Sprintf("%d GB in %v", image.SizeGb, image.Location)
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"Image",
@@ -230,7 +232,7 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%d GB in %s", sizeGb, disk.Template.Region)
+		spec := fmt.Sprintf("%d GB in %v", sizeGb, disk.Template.Location)
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		// Assume there is only one price
 		return []string{
@@ -248,6 +250,16 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 }
 
 func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([][]string, error) {
+	/*
+		var gvm assets.GCloudVM
+		if err := ptypes.UnmarshalAny(
+			vm.Template.ProviderDetails[assets.GcloudProvider],
+			&gvm); err != nil {
+			return nil, err
+		}
+		_ = gvm
+	*/
+	// TODO: should use actual numbers from the provider details
 	cpuCount := vm.Template.Type.CpuCount
 	memoryGb := vm.Template.Type.MemoryGb
 	usage := vm.UsageHoursPerMonth
@@ -258,7 +270,7 @@ func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingI
 	for skuId, price := range pricing {
 		pe := price.PricingExpression
 		resourceName := ""
-		if pe.UsageUnit == "h" {  // cpu hours
+		if pe.UsageUnit == "h" { // cpu hours
 			maxUsage = uint64(30 * 24 * cpuCount * vmCount)
 			projectedUsage = uint64(usage * cpuCount * vmCount)
 			resourceName = "cpu"
@@ -268,13 +280,13 @@ func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingI
 			resourceName = "memory"
 		} else {
 			return nil, fmt.Errorf("sku %s has unknown usage unit %s",
-			skuId, pe.UsageUnit)
+				skuId, pe.UsageUnit)
 		}
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%v in %s", vm.Template.Type, vm.Template.Region)
+		spec := fmt.Sprintf("%v in %v", vm.Template.Type, vm.Template.Location)
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		costs = append(costs, []string{
 			fmt.Sprintf("VM %s", resourceName),

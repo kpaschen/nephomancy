@@ -2,11 +2,11 @@ package cache
 
 import (
 	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"nephomancy/gcloud/assets"
 	"strings"
 	"time"
-	"nephomancy/gcloud/assets"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func populateBillingServices(db *sql.DB) error {
@@ -73,7 +73,7 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 			continue
 		}
 		// s.Name is expected to be of the form services/<sid>/skus/<skuid>
-                parts := strings.Split(s.Name, "/")
+		parts := strings.Split(s.Name, "/")
 		if len(parts) != 4 {
 			log.Printf("skipping sku %s because its name does not have four parts\n", s.Name)
 			// could also verify that parts[3] == s.SkuId
@@ -90,21 +90,26 @@ func populateSkuTable(db *sql.DB, billingServiceName *string) error {
 			_, err := srStatement.Exec(sr, s.SkuId)
 			if err != nil {
 				log.Printf("not adding region %s to sku %s because %v\n",
-				sr, s.SkuId, err)
+					sr, s.SkuId, err)
 				continue
 			}
 		}
 		for _, p := range s.PricingInfo {
 			pr, err := FromJson(&p.PricingExpression)
 			if err != nil {
-				log.Printf("Failed to parse pricing expression %s: %v\n",
-				p.PricingExpression, err)
+				// A few Skus have nil tiered rates so FromJson
+				// cannot determine the type for the empty list.
+				// That should be harmless, especially since
+				// TieredRates being nil means there is no
+				// charge for this Sku.
+				log.Printf("sku %s (%s): failed to parse pricing expression %s: %v\n",
+					s.SkuId, s.Description, p.PricingExpression, err)
 				continue
 			}
 			_, err = pStatement.Exec(
-			p.Summary, p.CurrencyConversionRate,
-			pr.BaseUnit, pr.BaseUnitConversionFactor, pr.UsageUnit,
-			p.AggregationInfo, s.SkuId)
+				p.Summary, p.CurrencyConversionRate,
+				pr.BaseUnit, pr.BaseUnitConversionFactor, pr.UsageUnit,
+				p.AggregationInfo, s.SkuId)
 			if err != nil {
 				return err
 			}
@@ -145,13 +150,13 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 	}
 
 	insertMachineType := `REPLACE INTO MachineTypes(MachineType,
-	CpuCount, MemoryMb, IsSharedCpu) VALUES (?,?,?,?)`;
+	CpuCount, MemoryMb, IsSharedCpu) VALUES (?,?,?,?)`
 	insertMachineTypeByZone := `
 	REPLACE INTO MachineTypesByZone(Zone, MachineType)
 	VALUES (?,?);`
 	insertAcceleratorTypes := `REPLACE INTO AcceleratorTypes(
 		AcceleratorType, MachineType, AcceleratorCount)
-		VALUES (?,?,?)`;
+		VALUES (?,?,?)`
 
 	statement, err = db.Prepare(insertMachineType)
 	if err != nil {
@@ -174,7 +179,7 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 		}
 		for _, mt := range mtypes {
 			_, err = statement.Exec(mt.Name, mt.CpuCount,
-			mt.MemoryMb, mt.IsSharedCpu)
+				mt.MemoryMb, mt.IsSharedCpu)
 			if err != nil {
 				return err
 			}
@@ -192,7 +197,7 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 	}
 
 	insertDiskType := `REPLACE INTO DiskTypes(DiskType,
-	DefaultSizeGb, Region) VALUES(?,?,"None")`;
+	DefaultSizeGb, Region) VALUES(?,?,"None")`
 	insertDiskTypeByZone := `
 	REPLACE INTO DiskTypesByZone(Zone, DiskType)
 	VALUES (?,?);`
@@ -225,7 +230,7 @@ func populateComputeMetadata(db *sql.DB, project string) error {
 	}
 
 	insertDiskType = `REPLACE INTO DiskTypes(DiskType,
-	DefaultSizeGb, Region) VALUES(?,?,?)`;
+	DefaultSizeGb, Region) VALUES(?,?,?)`
 
 	statement, err = db.Prepare(insertDiskType)
 	if err != nil {
@@ -255,9 +260,9 @@ func PopulateDatabase(db *sql.DB, project string) error {
 		return err
 	}
 	// This is just a subset of the services that exist.
-	const CE = "services/6F81-5844-456A"  // ComputeEngine
-	const KE = "services/CCD8-9BF1-090E"  // KubernetesEngine
-	const SM = "services/58CD-E7C3-72CA"  // Stackdriver monitoring
+	const CE = "services/6F81-5844-456A" // ComputeEngine
+	const KE = "services/CCD8-9BF1-090E" // KubernetesEngine
+	const SM = "services/58CD-E7C3-72CA" // Stackdriver monitoring
 	const Stackdriver = "services/879F-1832-8749"
 	const StackdriverLogging = "services/5490-F7B7-8DF6"
 	const Spanner = "services/CC63-0873-48FD"
@@ -271,7 +276,7 @@ func PopulateDatabase(db *sql.DB, project string) error {
 	const SourceRepo = "services/CAE2-A537-4A95"
 	const Support = "services/2062-016F-44A2"
 	baseServices := [7]string{CE, KE, SM, Stackdriver, StackdriverLogging,
-	Functions, AppEngine}
+		Functions, AppEngine}
 	for _, s := range baseServices {
 		log.Printf("Adding skus for base service %s to db\n", s)
 		err = populateSkuTable(db, &s)
