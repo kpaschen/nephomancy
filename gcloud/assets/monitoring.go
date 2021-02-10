@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/types/known/durationpb"
 	"cloud.google.com/go/monitoring/apiv3"
 	//	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
@@ -25,7 +26,7 @@ func getMetricDescriptors(project string, metricType string, resourceType string
 	}
 	nextPageToken := ""
 	// filter := fmt.Sprintf(`metric.type=starts_with("%s")`, "networking.googleapis.com")
-	filter := fmt.Sprintf(`metric.type=starts_with("%s") AND resource.type=starts_with("%s")`,
+	filter := fmt.Sprintf(`metric.type="%s" AND resource.type="%s"`,
 		metricType, resourceType)
 	for {
 		req := &monitoringpb.ListMetricDescriptorsRequest{
@@ -53,9 +54,6 @@ func getMetricDescriptors(project string, metricType string, resourceType string
 	return nil
 }
 
-// This gets the most recent value of the given time series, averaged
-// over all instances.
-// TODO: finish debugging this once there is monitoring data.
 func getTimeSeries(project string, metricType string, resourceType string) error {
 	ctx := context.Background()
 	client, err := monitoring.NewMetricClient(ctx)
@@ -68,26 +66,35 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 			Seconds: now,
 		},
 		StartTime: &timestamppb.Timestamp{
-			Seconds: now - 60,
+			Seconds: now - 86400,
 		},
 	}
-	filter := fmt.Sprintf(`metric.type=starts_with("%s") AND resource.type=starts_with("%s")`,
+	filter := fmt.Sprintf(`metric.type="%s" AND resource.type="%s"`,
 		metricType, resourceType)
+	groupBy := "metric.labels.instance_name"
+	_ = groupBy
 	req := &monitoringpb.ListTimeSeriesRequest{
 		Name:     project,
 		Filter:   filter,
 		Interval: interval,
+		View:     monitoringpb.ListTimeSeriesRequest_FULL,
 		Aggregation: &monitoringpb.Aggregation{
 			CrossSeriesReducer: monitoringpb.Aggregation_REDUCE_SUM,
+			PerSeriesAligner: monitoringpb.Aggregation_ALIGN_RATE,
+			AlignmentPeriod: &durationpb.Duration{ Seconds: 600 },
+		        GroupByFields: []string{groupBy},
 		},
 	}
+	fmt.Printf("sending ts request: %+v\n", req)
 	it := client.ListTimeSeries(ctx, req)
 	for {
 		resp, err := it.Next()
 		if err == iterator.Done {
+			fmt.Printf("done going over time series\n")
 			break
 		}
 		if err != nil {
+			fmt.Printf("error: %v\n", err)
 			return err
 		}
 		fmt.Printf("ts: %+v\n", resp)
@@ -97,11 +104,12 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 
 func ListMetrics(project string) error {
 	err := getMetricDescriptors(project,
-		"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
+		// "networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
+		"compute.googleapis.com/instance/uptime", "gce_instance")
 	if err != nil {
 		return err
 	}
 	err = getTimeSeries(project,
-		"networking.googleapis.com/vm_flow/egress_bytes_count", "gce_instance")
+		"compute.googleapis.com/instance/uptime", "gce_instance")
 	return nil
 }

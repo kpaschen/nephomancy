@@ -1,6 +1,7 @@
 package assets
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -18,6 +19,7 @@ type AcceleratorType struct {
 type MachineType struct {
 	Name         string
 	CpuCount     uint32
+	GpuCount     uint32
 	MemoryMb     uint64
 	IsSharedCpu  bool
 	Accelerators []AcceleratorType
@@ -33,6 +35,40 @@ type DiskType struct {
 type ResourceMetadata struct {
 	Mt MachineType
 	Dt DiskType
+}
+
+// Resource Group for querying Skus per machine type.
+func ResourceGroupByMachineType(mt string) ([]string, error) {
+	parts := strings.Split(mt, "-")
+	if len(parts) == 2 {
+		// e2-medium, e2-micro, e2-small: 2 vcpus, shared
+		// f1-micro, g1-small: 1 vcpu, shared
+		series := parts[0]
+		if series == "e2" {
+			return []string{"CPU","RAM",}, nil
+		}
+		// f1 and g1 appear to be charged by-instance not by cpu/ram
+		if mt == "f1-micro" {
+			return []string{"F1Micro",}, nil
+		}
+		if mt == "g1-small" {
+			return []string{"G1Small",}, nil
+		}
+
+	} else if len(parts) == 3 {
+		series := parts[0]
+		spec := parts[1]
+		// cpucount := parts[2]  // for a2 this is actually the gpu count
+
+		if series == "n1" && spec == "standard" {
+			return []string{"N1Standard"}, nil
+		}
+		if series == "a2" {
+			return []string{"CPU","RAM","GPU",}, nil
+		}
+		return []string{"CPU","RAM",}, nil
+	}
+	return nil, fmt.Errorf("unrecognised machine type name: %s", mt)
 }
 
 // Max bandwith for a given machine type, in Gb per second.

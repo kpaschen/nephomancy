@@ -3,6 +3,7 @@ package pricing
 import (
 	"database/sql"
 	"fmt"
+	"github.com/golang/protobuf/ptypes"
 	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
 	"nephomancy/gcloud/cache"
@@ -11,18 +12,28 @@ import (
 func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	costs := make([][]string, 0)
 	for _, vmset := range p.VmSets {
-		skus, _ := cache.GetSkusForInstance(db, *vmset.Template)
+		var gvm assets.GCloudVM
+		if err := ptypes.UnmarshalAny(
+			vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm); err != nil {
+			return nil, err
+		}
+		skus, _ := cache.GetSkusForInstance(db, gvm)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 		}
-		vmcosts, err := vmCostRange(db, *vmset, pi)
+		vmcosts, err := vmCostRange(db, *vmset, gvm, pi)
 		if err != nil {
 			return nil, err
 		}
 		costs = append(costs, vmcosts...)
 	}
 	for _, dset := range p.DiskSets {
-		skus, _ := cache.GetSkusForDisk(db, *dset.Template)
+		var gdsk assets.GCloudDisk
+		if err := ptypes.UnmarshalAny(
+			dset.Template.ProviderDetails[assets.GcloudProvider], &gdsk); err != nil {
+			return nil, err
+		}
+		skus, _ := cache.GetSkusForDisk(db, gdsk)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 			return nil, err
@@ -34,7 +45,12 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		costs = append(costs, dcosts)
 	}
 	for _, img := range p.Images {
-		skus, _ := cache.GetSkusForImage(db, *img)
+		var gi assets.GCloudImage
+		if err := ptypes.UnmarshalAny(
+			img.ProviderDetails[assets.GcloudProvider], &gi); err != nil {
+				return nil, err
+		}
+		skus, _ := cache.GetSkusForImage(db, gi)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 			return nil, err
@@ -249,19 +265,14 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 	return nil, fmt.Errorf("no price found for disk")
 }
 
-func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([][]string, error) {
-	/*
-		var gvm assets.GCloudVM
-		if err := ptypes.UnmarshalAny(
-			vm.Template.ProviderDetails[assets.GcloudProvider],
-			&gvm); err != nil {
-			return nil, err
-		}
-		_ = gvm
-	*/
-	// TODO: should use actual numbers from the provider details
-	cpuCount := vm.Template.Type.CpuCount
-	memoryGb := vm.Template.Type.MemoryGb
+func vmCostRange(db *sql.DB, vm common.VMSet, gvm assets.GCloudVM, pricing map[string](cache.PricingInfo)) ([][]string, error) {
+	mt, err := cache.GetMachineType(db, gvm.MachineType, gvm.Region)
+	if err != nil {
+		return nil, err
+	}
+	cpuCount := mt.CpuCount
+	memoryGb := uint32(mt.MemoryMb / 1024)
+	fmt.Printf("vm with mt %s has %d mb memory. in gb: %d\n", mt, mt.MemoryMb, memoryGb)
 	usage := vm.UsageHoursPerMonth
 	vmCount := vm.Count
 	var maxUsage uint64
