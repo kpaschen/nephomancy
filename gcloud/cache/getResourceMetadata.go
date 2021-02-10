@@ -297,7 +297,6 @@ func getDiskTypeBySpec(db *sql.DB, dt common.DiskType, r []string) (
 	}
 	queryDiskType := fmt.Sprintf(`SELECT DISTINCT DiskType, Region from DiskTypes WHERE DefaultSizeGb >= %d AND Region in %s AND %s`,
 		dt.SizeGb, regionsClause.String(), typeClause)
-	fmt.Printf("query: %s\n", queryDiskType)
 	res, err := db.Query(queryDiskType)
 	if err != nil {
 		return "", []string{}, err
@@ -356,7 +355,6 @@ func getMachineTypeBySpec(db *sql.DB, st common.MachineType, r []string) (
 		regionsClause.String(), st.CpuCount, st.CpuCount*2,
 		st.MemoryGb*1000, st.MemoryGb*2000)
 
-	fmt.Printf("query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return "", []string{}, err
@@ -415,7 +413,6 @@ func GetMachineType(db *sql.DB, mt string, region string) (
 	} else {
 		queryMachineType = fmt.Sprintf(`SELECT mt.CpuCount, mt.MemoryMb, mt.IsSharedCpu FROM MachineTypes mt JOIN MachineTypesByZone mtbz on mt.MachineType=mtbz.MachineType JOIN RegionZone rz on mtbz.Zone=rz.Zone WHERE rz.Region='%s' AND mt.MachineType='%s';`, region, mt)
 	}
-	fmt.Printf("query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return assets.MachineType{}, err

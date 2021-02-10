@@ -119,10 +119,17 @@ func GetSkusForInstance(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup IN %s ", groupsClause.String())
 
 	parts := strings.Split(machineType, "-")
-	first := strings.ToUpper(parts[0])
-	fmt.Fprintf(&querySku, " AND Sku.Description like '%s %%' ", first)
+	if parts[0] == "f1" {
+		querySku.WriteString(" AND Sku.Description like 'Micro %%' ")
+	} else if parts[0] == "g1" {
+		querySku.WriteString(" AND Sku.Description like 'Small %%' ")
+	} else {
+		first := strings.ToUpper(parts[0])
+		fmt.Fprintf(&querySku, " AND Sku.Description like '%s %%' ", first)
+	}
 	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())
+
 }
 
 func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
@@ -167,32 +174,24 @@ func getGlobalRegions() []string {
 	return []string{"APAC", "EMEA", "Americas"}
 }
 
-func GetSkusForIngress(db *sql.DB, region string, networkTier string) ([]string, error) {
+func GetSkusForIpAddress(db *sql.DB, region string, isStatic bool) ([]string, error) {
+	// IP address skus can be static and single-region, static
+	// and multi-regional, or external. External IP addresses
+	// are charged differently for standard vs. preemptible VMs.
 	var querySku strings.Builder
-	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
-	WHERE Sku.ResourceFamily='Network'`)
-	if region != "" {
-		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
-	}
-	// There are other types of ingress (e.g. GoogleIngress), but this should give an ok
-	// upper bound for costs.
-	if networkTier == "PREMIUM" {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetIngress' ")
-	} else {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetIngress' ")
-	}
-	for idx, area := range getGlobalRegions() {
-		if idx == 0 {
-			querySku.WriteString(" AND (Sku.Description like '% from ")
-			querySku.WriteString(area)
-			querySku.WriteString(" to %'")
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku WHERE Sku.ResourceFamily='Network' AND Sku.ResourceGroup='IpAddress'`)
+	if isStatic {
+		if region != "" {
+			fmt.Fprintf(&querySku, " AND Sku.Regions='%s' ", region)
 		} else {
-			querySku.WriteString(" OR Sku.Description like '% from ")
-			querySku.WriteString(area)
-			querySku.WriteString(" to %'")
+			querySku.WriteString(" AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
 		}
+	} else {
+		querySku.WriteString(" AND Sku.GeoTaxonomyType='GLOBAL' ")
+		// Not looking at preemptible vs. other VMs yet.
+		querySku.WriteString(" AND Sku.Description like '% Standard VM' ")
 	}
-	fmt.Fprintf(&querySku, ");")
+	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())
 }
 

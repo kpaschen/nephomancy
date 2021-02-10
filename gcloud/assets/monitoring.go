@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/types/known/durationpb"
 	"cloud.google.com/go/monitoring/apiv3"
+	"google.golang.org/protobuf/types/known/durationpb"
 	//	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/api/iterator"
@@ -80,9 +80,9 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 		View:     monitoringpb.ListTimeSeriesRequest_FULL,
 		Aggregation: &monitoringpb.Aggregation{
 			CrossSeriesReducer: monitoringpb.Aggregation_REDUCE_SUM,
-			PerSeriesAligner: monitoringpb.Aggregation_ALIGN_RATE,
-			AlignmentPeriod: &durationpb.Duration{ Seconds: 600 },
-		        GroupByFields: []string{groupBy},
+			PerSeriesAligner:   monitoringpb.Aggregation_ALIGN_RATE,
+			AlignmentPeriod:    &durationpb.Duration{Seconds: 600},
+			GroupByFields:      []string{groupBy},
 		},
 	}
 	fmt.Printf("sending ts request: %+v\n", req)

@@ -45,14 +45,14 @@ func ResourceGroupByMachineType(mt string) ([]string, error) {
 		// f1-micro, g1-small: 1 vcpu, shared
 		series := parts[0]
 		if series == "e2" {
-			return []string{"CPU","RAM",}, nil
+			return []string{"CPU", "RAM"}, nil
 		}
 		// f1 and g1 appear to be charged by-instance not by cpu/ram
 		if mt == "f1-micro" {
-			return []string{"F1Micro",}, nil
+			return []string{"F1Micro"}, nil
 		}
 		if mt == "g1-small" {
-			return []string{"G1Small",}, nil
+			return []string{"G1Small"}, nil
 		}
 
 	} else if len(parts) == 3 {
@@ -64,9 +64,9 @@ func ResourceGroupByMachineType(mt string) ([]string, error) {
 			return []string{"N1Standard"}, nil
 		}
 		if series == "a2" {
-			return []string{"CPU","RAM","GPU",}, nil
+			return []string{"CPU", "RAM", "GPU"}, nil
 		}
-		return []string{"CPU","RAM",}, nil
+		return []string{"CPU", "RAM"}, nil
 	}
 	return nil, fmt.Errorf("unrecognised machine type name: %s", mt)
 }

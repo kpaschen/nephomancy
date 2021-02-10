@@ -47,10 +47,10 @@ func (c *ServicesCommand) Run(args []string) int {
 	fmt.Printf("regions: %v", regions)
 
 	/*
-	err = assets.ListServices(projectPath)
-	if err != nil {
-		log.Fatalf("Failed to get services: %v", err)
-	}
+		err = assets.ListServices(projectPath)
+		if err != nil {
+			log.Fatalf("Failed to get services: %v", err)
+		}
 	*/
 
 	// err = assets.ListMetrics(projectPath, `metric.type=starts_with("compute.googleapis.com")`)
