@@ -9,8 +9,10 @@ message GCloudVM {
   string machine_type = 1;
   string region = 2;
   string zone = 3;
+  // OnDemand, Preemptible, Commit1Yr, Commit3Yr
   string scheduling = 4;
-  string network_tier = 5;
+  string sharing = 5; // SoleTenancy, SharedCpu. Default is nothing.
+  string network_tier = 6;
 }
 
 message GCloudDisk {

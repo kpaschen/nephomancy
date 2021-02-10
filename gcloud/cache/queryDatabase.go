@@ -3,9 +3,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
-	"github.com/golang/protobuf/ptypes"
 	"log"
-	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
 	"strings"
 	// concrete db driver even though the code only refers to interface.
@@ -16,7 +14,7 @@ const ComputeService = "6F81-5844-456A"
 const ContainerService = "CCD8-9BF1-090E"
 const MonitoringService = "58CD-E7C3-72CA"
 
-// returns a map of skuid to pricing info
+// Returns a map of skuid to pricing info.
 func GetPricingInfo(db *sql.DB, skus []string) (map[string](PricingInfo), error) {
 	var queryPricingInfo string
 	ret := make(map[string](PricingInfo))
@@ -92,41 +90,49 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 	}
 }
 
-func GetSkusForInstance(db *sql.DB, vm common.VM) ([]string, error) {
-	var gvm assets.GCloudVM
-	err := ptypes.UnmarshalAny(vm.ProviderDetails[assets.GcloudProvider], &gvm)
-	if err != nil {
-		return nil, err
-	}
+func GetSkusForInstance(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{gvm.Region})
 	if gvm.Scheduling != "" {
 		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", gvm.Scheduling)
 	}
+	if gvm.Sharing == "SoleTenancy" {
+		querySku.WriteString(" AND Sku.Description like '% Sole Tenancy %' ")
+	} else {
+		querySku.WriteString(" AND Sku.Description not like '% Sole Tenancy %' ")
+	}
+	querySku.WriteString(" AND Sku.Description not like '% Custom %' ")
 	machineType := gvm.MachineType
-	// Now the machine type is something like 'n1-standard-2' but the ResourceGroup
-	// only uses part of that, so n1-standard-2 needs ResourceGroup N1Standard.
-	// TODO: not sure if this is always correct, maybe need to do a lookup table.
-	parts := strings.Split(machineType, "-")
-	if len(parts) != 3 {
-		log.Fatalf("Unexpected machine type format %s\n", machineType)
-	}
-	resourceGroup := fmt.Sprintf("%s%s", strings.Title(parts[0]), strings.Title(parts[1]))
-	if machineType != "" {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
-	}
-	fmt.Fprintf(&querySku, ";")
-	fmt.Printf("instance sku query: %s\n", querySku.String())
-	return getSkusForQuery(db, querySku.String())
-}
-
-func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
-
-	var gd assets.GCloudDisk
-	err := ptypes.UnmarshalAny(disk.ProviderDetails[assets.GcloudProvider], &gd)
+	resourceGroups, err := assets.ResourceGroupByMachineType(machineType)
 	if err != nil {
 		return nil, err
 	}
+	var groupsClause strings.Builder
+	fmt.Fprintf(&groupsClause, "(")
+	for idx, gr := range resourceGroups {
+		fmt.Fprintf(&groupsClause, "'%s'", gr)
+		if idx < len(resourceGroups)-1 {
+			fmt.Fprintf(&groupsClause, ",")
+		}
+	}
+	fmt.Fprintf(&groupsClause, ") ")
+	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup IN %s ", groupsClause.String())
+
+	parts := strings.Split(machineType, "-")
+	if parts[0] == "f1" {
+		querySku.WriteString(" AND Sku.Description like 'Micro %%' ")
+	} else if parts[0] == "g1" {
+		querySku.WriteString(" AND Sku.Description like 'Small %%' ")
+	} else {
+		first := strings.ToUpper(parts[0])
+		fmt.Fprintf(&querySku, " AND Sku.Description like '%s %%' ", first)
+	}
+	fmt.Fprintf(&querySku, ";")
+	return getSkusForQuery(db, querySku.String())
+
+}
+
+func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
 	diskType := gd.DiskType
@@ -138,30 +144,26 @@ func GetSkusForDisk(db *sql.DB, disk common.Disk) ([]string, error) {
 		resourceGroup = "SSD"
 	case "pd-balanced":
 		resourceGroup = "SSD"
+		querySku.WriteString(" AND Sku.Description like 'Balanced %' ")
 	default:
 		log.Fatalf("Unknown disk type %s in completeDiskQuery\n", diskType)
 	}
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	// TODO the region query isn't quite right for all disk types.
 	if gd.IsRegional {
-		querySku.WriteString(" AND Sku.Description like 'Regional %' ")
+		querySku.WriteString(" AND Sku.GeoTaxonomyType='REGIONAL' ")
 	} else {
-		querySku.WriteString(" AND Sku.Description like 'Storage %' AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
+		querySku.WriteString(" AND Sku.Description not like 'Regional %' ")
 	}
 	// TODO: create other disks and see which SKU they end up with.
 
-	fmt.Fprintf(&querySku, ";")
+	querySku.WriteString(";")
 	return getSkusForQuery(db, querySku.String())
 }
 
-func GetSkusForImage(db *sql.DB, image common.Image) ([]string, error) {
-	var gi assets.GCloudImage
-	err := ptypes.UnmarshalAny(image.ProviderDetails[assets.GcloudProvider], &gi)
-	if err != nil {
-		return nil, err
-	}
+func GetSkusForImage(db *sql.DB, image assets.GCloudImage) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gi.Region})
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }
@@ -172,32 +174,24 @@ func getGlobalRegions() []string {
 	return []string{"APAC", "EMEA", "Americas"}
 }
 
-func GetSkusForIngress(db *sql.DB, region string, networkTier string) ([]string, error) {
+func GetSkusForIpAddress(db *sql.DB, region string, isStatic bool) ([]string, error) {
+	// IP address skus can be static and single-region, static
+	// and multi-regional, or external. External IP addresses
+	// are charged differently for standard vs. preemptible VMs.
 	var querySku strings.Builder
-	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
-	WHERE Sku.ResourceFamily='Network'`)
-	if region != "" {
-		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
-	}
-	// There are other types of ingress (e.g. GoogleIngress), but this should give an ok
-	// upper bound for costs.
-	if networkTier == "PREMIUM" {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetIngress' ")
-	} else {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetIngress' ")
-	}
-	for idx, area := range getGlobalRegions() {
-		if idx == 0 {
-			querySku.WriteString(" AND (Sku.Description like '% from ")
-			querySku.WriteString(area)
-			querySku.WriteString(" to %'")
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku WHERE Sku.ResourceFamily='Network' AND Sku.ResourceGroup='IpAddress'`)
+	if isStatic {
+		if region != "" {
+			fmt.Fprintf(&querySku, " AND Sku.Regions='%s' ", region)
 		} else {
-			querySku.WriteString(" OR Sku.Description like '% from ")
-			querySku.WriteString(area)
-			querySku.WriteString(" to %'")
+			querySku.WriteString(" AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
 		}
+	} else {
+		querySku.WriteString(" AND Sku.GeoTaxonomyType='GLOBAL' ")
+		// Not looking at preemptible vs. other VMs yet.
+		querySku.WriteString(" AND Sku.Description like '% Standard VM' ")
 	}
-	fmt.Fprintf(&querySku, ");")
+	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())
 }
 
@@ -256,6 +250,7 @@ func GetSkusForInternalEgress(db *sql.DB, region string) ([]string, error) {
 }
 
 func getSkusForQuery(db *sql.DB, query string) ([]string, error) {
+	fmt.Printf("running sku query: %s\n", query)
 	res, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -277,5 +272,6 @@ func getSkusForQuery(db *sql.DB, query string) ([]string, error) {
 		keys[i] = k
 		i++
 	}
+	fmt.Printf("returning skus: %v\n", keys)
 	return keys, nil
 }

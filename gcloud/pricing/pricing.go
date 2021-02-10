@@ -3,6 +3,8 @@ package pricing
 import (
 	"database/sql"
 	"fmt"
+	"github.com/golang/protobuf/ptypes"
+	"math"
 	common "nephomancy/common/resources"
 	"nephomancy/gcloud/assets"
 	"nephomancy/gcloud/cache"
@@ -11,18 +13,28 @@ import (
 func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	costs := make([][]string, 0)
 	for _, vmset := range p.VmSets {
-		skus, _ := cache.GetSkusForInstance(db, *vmset.Template)
+		var gvm assets.GCloudVM
+		if err := ptypes.UnmarshalAny(
+			vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm); err != nil {
+			return nil, err
+		}
+		skus, _ := cache.GetSkusForInstance(db, gvm)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 		}
-		vmcosts, err := vmCostRange(db, *vmset, pi)
+		vmcosts, err := vmCostRange(db, *vmset, gvm, pi)
 		if err != nil {
 			return nil, err
 		}
 		costs = append(costs, vmcosts...)
 	}
 	for _, dset := range p.DiskSets {
-		skus, _ := cache.GetSkusForDisk(db, *dset.Template)
+		var gdsk assets.GCloudDisk
+		if err := ptypes.UnmarshalAny(
+			dset.Template.ProviderDetails[assets.GcloudProvider], &gdsk); err != nil {
+			return nil, err
+		}
+		skus, _ := cache.GetSkusForDisk(db, gdsk)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 			return nil, err
@@ -34,7 +46,12 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		costs = append(costs, dcosts)
 	}
 	for _, img := range p.Images {
-		skus, _ := cache.GetSkusForImage(db, *img)
+		var gi assets.GCloudImage
+		if err := ptypes.UnmarshalAny(
+			img.ProviderDetails[assets.GcloudProvider], &gi); err != nil {
+			return nil, err
+		}
+		skus, _ := cache.GetSkusForImage(db, gi)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
 			return nil, err
@@ -45,39 +62,41 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		}
 		costs = append(costs, icosts)
 	}
+	// Go over the vms again for networking. There will be one external IP
+	// per VM (well, per NIC, but ok). It can be static or external.
+	for _, vmset := range p.VmSets {
+		// This assumes the addresses are all external.
+		addrSkus, _ := cache.GetSkusForIpAddress(db, "", false)
+		pi, _ := cache.GetPricingInfo(db, addrSkus)
+		c, err := ipAddrCostRange(db, *vmset, pi)
+		if err != nil {
+			return nil, err
+		}
+		costs = append(costs, c)
+	}
 	for _, nw := range p.Networks {
-		ncosts := make([][]string, 3)
 		for _, snw := range nw.Subnetworks {
+			ncosts := make([][]string, 2)
 			region, tier, _ := assets.SubnetworkRegionTier(*snw)
-			ingressSkus, _ := cache.GetSkusForIngress(
+			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
 				db, region, tier)
-			pi, _ := cache.GetPricingInfo(db, ingressSkus)
-			// TODO: this needs to be done per load balancer
-			c1, err := subnetworkCostRange(db, *snw, true, true, pi)
+			pi, _ := cache.GetPricingInfo(db, externalEgressSkus)
+			c1, err := subnetworkCostRange(db, *snw, true, pi)
 			if err != nil {
 				return nil, err
 			}
 			ncosts[0] = c1
-			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
-				db, region, tier)
-			pi, _ = cache.GetPricingInfo(db, externalEgressSkus)
-			c2, err := subnetworkCostRange(db, *snw, false, true, pi)
+			internalEgressSkus, _ := cache.GetSkusForInternalEgress(
+				db, region)
+			pi, _ = cache.GetPricingInfo(db, internalEgressSkus)
+			c2, err := subnetworkCostRange(db, *snw, false, pi)
 			if err != nil {
 				return nil, err
 			}
 			ncosts[1] = c2
-			internalEgressSkus, _ := cache.GetSkusForInternalEgress(
-				db, region)
-			pi, _ = cache.GetPricingInfo(db, internalEgressSkus)
-			c3, err := subnetworkCostRange(db, *snw, false, false, pi)
-			if err != nil {
-				return nil, err
-			}
-			ncosts[2] = c3
+			costs = append(costs, ncosts...)
 		}
-		costs = append(costs, ncosts...)
 	}
-
 	return costs, nil
 }
 
@@ -140,17 +159,36 @@ func getTotalsForRate(
 	return maxTotal, expectedTotal, nil
 }
 
-func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork,
-	ingress bool, external bool,
-	pricing map[string](cache.PricingInfo)) (
-	[]string, error) {
+func ipAddrCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
+	vmCount := vm.Count
+	usage := uint64(vm.UsageHoursPerMonth * vmCount)
+	maxUsage := uint64(30 * 24 * vmCount)
+	for _, price := range pricing {
+		max, exp, err := getTotalsForRate(price, maxUsage, usage)
+		if err != nil {
+			return nil, err
+		}
+		spec := fmt.Sprintf("attached to VM running %d h in %v", usage, vm.Template.Location.GlobalRegion)
+		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
+		return []string{
+			"IP Address",
+			fmt.Sprintf("%d", vmCount),
+			spec,
+			fmt.Sprintf("%d h", maxUsage),
+			fmt.Sprintf("%.2f USD", max),
+			fmt.Sprintf("%d h", usage),
+			fmt.Sprintf("%.2f USD", exp),
+		}, nil
+	}
+	return nil, nil
+}
+
+func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork, external bool,
+	pricing map[string](cache.PricingInfo)) ([]string, error) {
 	var usage uint64
 	resourceName := ""
 	region, _, _ := assets.SubnetworkRegionTier(subnetwork)
-	if ingress {
-		usage = subnetwork.IngressGbitsPerMonth
-		resourceName = fmt.Sprintf("ingress traffic into %s", region)
-	} else if external {
+	if external {
 		usage = subnetwork.ExternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("external egress traffic from %s",
 			region)
@@ -249,19 +287,20 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 	return nil, fmt.Errorf("no price found for disk")
 }
 
-func vmCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([][]string, error) {
-	/*
-		var gvm assets.GCloudVM
-		if err := ptypes.UnmarshalAny(
-			vm.Template.ProviderDetails[assets.GcloudProvider],
-			&gvm); err != nil {
-			return nil, err
-		}
-		_ = gvm
-	*/
-	// TODO: should use actual numbers from the provider details
-	cpuCount := vm.Template.Type.CpuCount
-	memoryGb := vm.Template.Type.MemoryGb
+func vmCostRange(db *sql.DB, vm common.VMSet, gvm assets.GCloudVM, pricing map[string](cache.PricingInfo)) ([][]string, error) {
+	mt, err := cache.GetMachineType(db, gvm.MachineType, gvm.Region)
+	if err != nil {
+		return nil, err
+	}
+	cpuCount := mt.CpuCount
+	memoryGbFraction := float64(mt.MemoryMb) / 1024.0
+	_, div := math.Modf(memoryGbFraction)
+	var memoryGb uint32
+	if div >= 0.5 {
+		memoryGb = uint32(math.Ceil(memoryGbFraction))
+	} else {
+		memoryGb = uint32(math.Floor(memoryGbFraction))
+	}
 	usage := vm.UsageHoursPerMonth
 	vmCount := vm.Count
 	var maxUsage uint64

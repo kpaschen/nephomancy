@@ -19,7 +19,7 @@ func checkVmSpec(db *sql.DB, gvm assets.GCloudVM, spec common.VM) error {
 			return err
 		}
 	}
-	mt, err := getMachineType(db, gvm.MachineType, gvm.Region)
+	mt, err := GetMachineType(db, gvm.MachineType, gvm.Region)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 			if err = checkVmSpec(db, gvm, *vmset.Template); err != nil {
 				return err
 			}
-			mt, err := getMachineType(db, gvm.MachineType, gvm.Region)
+			mt, err := GetMachineType(db, gvm.MachineType, gvm.Region)
 			if err != nil {
 				return err
 			}
@@ -87,7 +87,7 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 				vmset.Template.Type = &common.MachineType{
 					CpuCount: mt.CpuCount,
 					MemoryGb: uint32(mt.MemoryMb / 1000),
-					GpuCount: 0, // FIXME
+					GpuCount: mt.GpuCount,
 				}
 			}
 		} else { // There are no provider details
@@ -297,7 +297,6 @@ func getDiskTypeBySpec(db *sql.DB, dt common.DiskType, r []string) (
 	}
 	queryDiskType := fmt.Sprintf(`SELECT DISTINCT DiskType, Region from DiskTypes WHERE DefaultSizeGb >= %d AND Region in %s AND %s`,
 		dt.SizeGb, regionsClause.String(), typeClause)
-	fmt.Printf("query: %s\n", queryDiskType)
 	res, err := db.Query(queryDiskType)
 	if err != nil {
 		return "", []string{}, err
@@ -340,6 +339,7 @@ func getDiskTypeBySpec(db *sql.DB, dt common.DiskType, r []string) (
 // one is returned. If there are several smallest types, the order of preference
 // is E2 > N2 > N2D > N1 (based on a generic "TCO" consideration).
 // TODO: probably want to take preemptible status, sole tenancy, commitments into account here.
+// TODO: also query by gpu count (also, if gpu requested, only look at a2)
 func getMachineTypeBySpec(db *sql.DB, st common.MachineType, r []string) (
 	string, []string, error) {
 	var regionsClause strings.Builder
@@ -355,7 +355,6 @@ func getMachineTypeBySpec(db *sql.DB, st common.MachineType, r []string) (
 		regionsClause.String(), st.CpuCount, st.CpuCount*2,
 		st.MemoryGb*1000, st.MemoryGb*2000)
 
-	fmt.Printf("query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return "", []string{}, err
@@ -405,7 +404,7 @@ func getMachineTypeBySpec(db *sql.DB, st common.MachineType, r []string) (
 }
 
 // Retrieves a machine type by type name and region.
-func getMachineType(db *sql.DB, mt string, region string) (
+func GetMachineType(db *sql.DB, mt string, region string) (
 	assets.MachineType, error) {
 	queryMachineType := ""
 	if region == "" {
@@ -414,7 +413,6 @@ func getMachineType(db *sql.DB, mt string, region string) (
 	} else {
 		queryMachineType = fmt.Sprintf(`SELECT mt.CpuCount, mt.MemoryMb, mt.IsSharedCpu FROM MachineTypes mt JOIN MachineTypesByZone mtbz on mt.MachineType=mtbz.MachineType JOIN RegionZone rz on mtbz.Zone=rz.Zone WHERE rz.Region='%s' AND mt.MachineType='%s';`, region, mt)
 	}
-	fmt.Printf("query: %s\n", queryMachineType)
 	res, err := db.Query(queryMachineType)
 	if err != nil {
 		return assets.MachineType{}, err

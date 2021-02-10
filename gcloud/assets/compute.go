@@ -102,11 +102,22 @@ func ListMachineTypes(project string, zone string) ([]MachineType, error) {
 					Count: a.GuestAcceleratorCount,
 				}
 			}
+			gpuCount := 0
+			if strings.HasPrefix(t.Name, "a2-") {
+				parts := strings.Split(t.Name, "-")
+				if len(parts) == 3 {
+					n, err := fmt.Scanf(parts[2], "%dg", &gpuCount)
+					if err != nil || n != 1 {
+						return nil, fmt.Errorf("could not get gcpu count for machine type %s", t.Name)
+					}
+				}
+			}
 			rt[idx] = MachineType{
 				CpuCount:     uint32(t.GuestCpus),
 				IsSharedCpu:  shared,
 				MemoryMb:     uint64(t.MemoryMb),
 				Name:         t.Name,
+				GpuCount:     uint32(gpuCount),
 				Accelerators: at,
 			}
 		}
