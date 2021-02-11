@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes"
 	_ "github.com/mattn/go-sqlite3"
+	"google.golang.org/protobuf/types/known/anypb"
 	"log"
 	"nephomancy/common/geo"
 	common "nephomancy/common/resources"
@@ -62,6 +63,9 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 // Checks consistency if neither spec nor details are empty.
 func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 	for _, vmset := range p.VmSets {
+		if vmset.Template.ProviderDetails == nil {
+			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
+		}
 		// If there are provider details
 		if vmset.Template.ProviderDetails[assets.GcloudProvider] != nil {
 			var gvm assets.GCloudVM
@@ -121,6 +125,9 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 		}
 	}
 	for _, dset := range p.DiskSets {
+		if dset.Template.ProviderDetails == nil {
+			dset.Template.ProviderDetails = make(map[string](*anypb.Any))
+		}
 		if dset.Template.ProviderDetails[assets.GcloudProvider] != nil {
 			// If there are provider details, use them.
 			var dsk assets.GCloudDisk
@@ -184,6 +191,9 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 		}
 	}
 	for _, img := range p.Images {
+		if img.ProviderDetails == nil {
+			img.ProviderDetails = make(map[string](*anypb.Any))
+		}
 		if img.ProviderDetails[assets.GcloudProvider] != nil {
 			var gi assets.GCloudImage
 			err := ptypes.UnmarshalAny(img.ProviderDetails[assets.GcloudProvider], &gi)

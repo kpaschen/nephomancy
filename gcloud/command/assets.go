@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// TODO: rename to ResourcesCommand (after extracting common parts)
 type AssetsCommand struct {
 	Command
 }
