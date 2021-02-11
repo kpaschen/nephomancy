@@ -66,7 +66,7 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 			Seconds: now,
 		},
 		StartTime: &timestamppb.Timestamp{
-			Seconds: now - 86400 * 7,
+			Seconds: now - 86400*7,
 		},
 	}
 	filter := fmt.Sprintf(`metric.type="%s" AND resource.type="%s"`,
