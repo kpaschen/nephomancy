@@ -66,7 +66,7 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 			Seconds: now,
 		},
 		StartTime: &timestamppb.Timestamp{
-			Seconds: now - 86400,
+			Seconds: now - 86400*7,
 		},
 	}
 	filter := fmt.Sprintf(`metric.type="%s" AND resource.type="%s"`,
@@ -80,7 +80,7 @@ func getTimeSeries(project string, metricType string, resourceType string) error
 		View:     monitoringpb.ListTimeSeriesRequest_FULL,
 		Aggregation: &monitoringpb.Aggregation{
 			CrossSeriesReducer: monitoringpb.Aggregation_REDUCE_SUM,
-			PerSeriesAligner:   monitoringpb.Aggregation_ALIGN_RATE,
+			PerSeriesAligner:   monitoringpb.Aggregation_ALIGN_MEAN,
 			AlignmentPeriod:    &durationpb.Duration{Seconds: 600},
 			GroupByFields:      []string{groupBy},
 		},
@@ -110,6 +110,6 @@ func ListMetrics(project string) error {
 		return err
 	}
 	err = getTimeSeries(project,
-		"compute.googleapis.com/instance/uptime", "gce_instance")
+		"compute.googleapis.com/instance/uptime_total", "gce_instance")
 	return nil
 }

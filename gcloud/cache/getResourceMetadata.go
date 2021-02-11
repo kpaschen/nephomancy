@@ -90,6 +90,9 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 					GpuCount: mt.GpuCount,
 				}
 			}
+			if vmset.UsageHoursPerMonth == 0 {
+				vmset.UsageHoursPerMonth = 24 * 30 // full usage
+			}
 		} else { // There are no provider details
 			if vmset.Template.Location == nil {
 				return fmt.Errorf("missing vmset location information\n")
@@ -149,6 +152,9 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 					DiskTech: tech,
 					SizeGb:   uint32(dt.DefaultSizeGb),
 				}
+			}
+			if dset.PercentUsedAvg == 0 {
+				dset.PercentUsedAvg = 100 // full usage
 			}
 		} else { // There are no provider details
 			if dset.Template.Location == nil {
