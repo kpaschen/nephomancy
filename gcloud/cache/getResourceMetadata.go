@@ -14,7 +14,7 @@ import (
 )
 
 // Returns nil if the gcloud vm meets the spec, an error otherwise.
-func checkVmSpec(db *sql.DB, gvm assets.GCloudVM, spec common.VM) error {
+func checkVmSpec(db *sql.DB, gvm assets.GCloudVM, spec common.Instance) error {
 	if l := spec.Location; l != nil {
 		if err := checkLocation(gvm.Region, *l); err != nil {
 			return err
@@ -62,7 +62,7 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 // Populates spec from provider details if the spec is empty.
 // Checks consistency if neither spec nor details are empty.
 func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
-	for _, vmset := range p.VmSets {
+	for _, vmset := range p.InstanceSets {
 		if vmset.Template.ProviderDetails == nil {
 			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
 		}

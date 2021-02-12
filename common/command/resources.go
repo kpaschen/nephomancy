@@ -3,8 +3,8 @@ package command
 import (
 	"fmt"
 	"log"
-	"strings"
 	"nephomancy/common/resources"
+	"strings"
 )
 
 type ResourcesCommand struct {
@@ -12,7 +12,7 @@ type ResourcesCommand struct {
 }
 
 func (r *ResourcesCommand) Help() string {
-        helpText := fmt.Sprintf(`
+	helpText := fmt.Sprintf(`
         Usage: nephomancy resources [options]
 
 	Create or complete a project resource file.
@@ -29,7 +29,7 @@ func (r *ResourcesCommand) Help() string {
           --projectin=filename %s
           --projectout=filename %s
 `, workingDirDoc, projectInDoc, projectOutDoc)
-        return strings.TrimSpace(helpText)
+	return strings.TrimSpace(helpText)
 }
 
 func (*ResourcesCommand) Synopsis() string {
@@ -49,7 +49,7 @@ func (r *ResourcesCommand) Run(args []string) int {
 		p, err := r.loadProject()
 		if err != nil {
 			log.Fatalf("Failed to load project from file %s: %v\n",
-			infile, err)
+				infile, err)
 		}
 		project = *p
 	} else {

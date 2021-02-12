@@ -21,12 +21,12 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 }
 
 // BuildProject takes a list of small assets and create a project proto
-// containing lists of vm sets, disk sets, and images.
+// containing lists of instance sets, disk sets, and images.
 func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	p := &common.Project{
-		VmSets:   make([]*common.VMSet, 0),
-		DiskSets: make([]*common.DiskSet, 0),
-		Images:   make([]*common.Image, 0),
+		InstanceSets: make([]*common.InstanceSet, 0),
+		DiskSets:     make([]*common.DiskSet, 0),
+		Images:       make([]*common.Image, 0),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -136,10 +136,10 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	return p, nil
 }
 
-func VmRegionZone(vm common.VM) (region string, zone string, err error) {
+func VmRegionZone(instance common.Instance) (region string, zone string, err error) {
 	var gvm GCloudVM
 	if err := ptypes.UnmarshalAny(
-		vm.ProviderDetails[GcloudProvider], &gvm); err != nil {
+		instance.ProviderDetails[GcloudProvider], &gvm); err != nil {
 		return "", "", err
 	}
 	return gvm.Region, gvm.Zone, nil
@@ -163,10 +163,10 @@ func SubnetworkRegionTier(subnetwork common.Subnetwork) (region string, tier str
 	return gsnw.Region, gsnw.Tier, nil
 }
 
-func vmNetworkTier(vm common.VM) (string, error) {
+func vmNetworkTier(instance common.Instance) (string, error) {
 	var gvm GCloudVM
 	if err := ptypes.UnmarshalAny(
-		vm.ProviderDetails[GcloudProvider], &gvm); err != nil {
+		instance.ProviderDetails[GcloudProvider], &gvm); err != nil {
 		return "", err
 	}
 	if gvm.NetworkTier == "" {
@@ -177,7 +177,7 @@ func vmNetworkTier(vm common.VM) (string, error) {
 
 func pruneSubnetworks(p *common.Project) error {
 	regions := make(map[string]string)
-	for _, vms := range p.VmSets {
+	for _, vms := range p.InstanceSets {
 		region, _, _ := VmRegionZone(*vms.Template)
 		tier, _ := vmNetworkTier(*vms.Template)
 		regions[region] = tier
@@ -236,10 +236,10 @@ func createSubnetwork(a SmallAsset) (*common.Subnetwork, error) {
 		IngressGbitsPerMonth: 20,
 		// This is a quota metric: compute.googleapis.com/vm_to_internet_egress_bandwidth
 		// The default value is 75 Gb total per region _per month_.
-		// There is also a cap based on the VMs you are using,
+		// There is also a cap based on the Instances you are using,
 		// but it is way more than the 75 Gbps per region.
 		ExternalEgressGbitsPerMonth: 75,
-		// There is an internal limit per VM, depending on the
+		// There is an internal limit per Instance, depending on the
 		// machine type. It is between 2 and 32 Gbit/s.
 		InternalEgressGbitsPerMonth: 100,
 		ProviderDetails: map[string]*anypb.Any{
@@ -267,23 +267,23 @@ func addNetworkToProject(p *common.Project, n *common.Network) error {
 }
 
 // The fingerprints are internal only. This just creates a basic
-// grouping of VMs into sets that is probably useful. There is
-// no need in general for VMSets to be uniquely distinguishable.
-func fingerprintVM(vm common.VM) (string, error) {
-	region, _, err := VmRegionZone(vm)
+// grouping of Instances into sets that is probably useful. There is
+// no need in general for InstanceSets to be uniquely distinguishable.
+func fingerprintVM(instance common.Instance) (string, error) {
+	region, _, err := VmRegionZone(instance)
 	if err != nil {
 		return "", err
 	}
 	if region == "" {
-		return "", fmt.Errorf("missing region for vm %+v", vm)
+		return "", fmt.Errorf("missing region for instance %+v", instance)
 	}
 	var fp strings.Builder
 	fmt.Fprintf(&fp, "%s:", region)
-	if vm.Type != nil {
-		fmt.Fprintf(&fp, "%s:", vm.Type)
+	if instance.Type != nil {
+		fmt.Fprintf(&fp, "%s:", instance.Type)
 	} else {
 		var gvm GCloudVM
-		err := ptypes.UnmarshalAny(vm.ProviderDetails[GcloudProvider], &gvm)
+		err := ptypes.UnmarshalAny(instance.ProviderDetails[GcloudProvider], &gvm)
 		if err != nil {
 			return "", err
 		}
@@ -292,28 +292,28 @@ func fingerprintVM(vm common.VM) (string, error) {
 	return fp.String(), nil
 }
 
-func addVMToProject(p *common.Project, vm *common.VM) error {
-	fp, err := fingerprintVM(*vm)
+func addVMToProject(p *common.Project, instance *common.Instance) error {
+	fp, err := fingerprintVM(*instance)
 	if err != nil {
 		return err
 	}
-	for _, vmSet := range p.VmSets {
-		f, _ := fingerprintVM(*vmSet.Template)
+	for _, instanceSet := range p.InstanceSets {
+		f, _ := fingerprintVM(*instanceSet.Template)
 		if f == fp {
-			vmSet.Count++
+			instanceSet.Count++
 			return nil
 		}
 	}
-	// No vmset with the given fingerprint yet
-	vset := common.VMSet{
-		Template: vm,
+	// No instance set with the given fingerprint yet
+	vset := common.InstanceSet{
+		Template: instance,
 		Count:    1,
 	}
-	p.VmSets = append(p.VmSets, &vset)
+	p.InstanceSets = append(p.InstanceSets, &vset)
 	return nil
 }
 
-func createVM(a SmallAsset) (*common.VM, error) {
+func createVM(a SmallAsset) (*common.Instance, error) {
 	networkTier := ""
 	if a.resourceMap["networkInterfaces"] != nil {
 		nw, _ := a.resourceMap["networkInterfaces"].([]interface{})
@@ -343,7 +343,7 @@ func createVM(a SmallAsset) (*common.VM, error) {
 		return nil, err
 	}
 
-	ret := common.VM{
+	ret := common.Instance{
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},

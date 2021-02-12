@@ -17,6 +17,7 @@ message Location {
   string global_region = 1; // APAC, EMEA, LATAM, NAM
   string continent = 2; // Asia, Africa, Australia, Europe, NorthAmerica, SouthAmerica
   string country_code = 3;  // ISO 2-letter country code
+  // TODO: esp. for country_code US, may want better subdivision
 }
 
 // MachineType contains specs for a physical or virtual machine (aka an Instance).
@@ -27,7 +28,6 @@ message MachineType {
   // Probably want something like preemptibility and sole tenancy here as well.
 }
 
-// TODO: rename to VolumeType
 // A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
 // Almost all providers will let you select "SSD" or "Not SSD", aka "Standard".
 message DiskType {
@@ -38,16 +38,16 @@ message DiskType {
 
 // Operating system image.
 message Image {
-  uint32 size_gb = 1;
-  Location location = 2;
-  map<string, google.protobuf.Any> provider_details = 3;
+  string name = 1;
+  uint32 size_gb = 2;
+  Location location = 3;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
-// TODO: rename to Instance
 // An instance is a virtual machine (VM) or a physical machine (sometimes called a Node).
 // TODO: maybe add external ip addresses here? At least temporary/ephemeral ones live
 // only with the VM. But static/permanent ones probably belong on the Network resource.
-message VM {
+message Instance {
   Location location = 1;
   MachineType type = 2;
   // You can have one detail per provider. The common VM is a spec; the provider
@@ -66,14 +66,13 @@ message VM {
   map<string, google.protobuf.Any> provider_details = 3;
 }
 
-// TODO: rename to InstanceSet
 // An Instance set collects similar instances. All the instances in the set are
 // represented by the template entry. This is so you can have multiple instances
 // of the same machine type in the same location without getting many identical
 // lines in the cost report.
-// TODO: maybe add a name to these sets?
-message VMSet {
-  VM template = 2;
+message InstanceSet {
+  string name = 1;  // The name is just for display purposes.
+  Instance template = 2;
   uint32 count = 3;
   // for cost estimate: how many hours/month do you expect this vm to be running.
   // When this is not set, cost estimate will be based on running continuously.
@@ -81,7 +80,6 @@ message VMSet {
   uint32 usage_hours_per_month = 4;
 }
 
-// TODO: rename to Volume
 // This is block storage.
 message Disk {
   Location location = 1;
@@ -93,9 +91,9 @@ message Disk {
   map<string, google.protobuf.Any> provider_details = 4;
 }
 
-// Volumes with the same location, type, and actual size
-// TODO: rename to VolumeSet
+// Disks with the same location, type, and actual size
 message DiskSet {
+  string name = 1; // Just for display
   Disk template = 2;
   uint32 count = 3;
   // for cost estimate: how much of the available space do you expect to be using (avg per month)
@@ -135,9 +133,12 @@ message Network {
   map<string, google.protobuf.Any> provider_details = 3;
 }
 
+// TODO: maybe have disks, images, some network stuff nested under InstanceSet.
+// then all the compute stuff would be together, and it would be easier to express
+// dependencies.
 message Project {
   string name = 1;
-  repeated VMSet vm_sets = 2;
+  repeated InstanceSet instance_sets = 2;
   repeated DiskSet disk_sets = 3;
   repeated Image images = 4;
   repeated Network networks = 5;

@@ -12,7 +12,7 @@ import (
 
 func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	costs := make([][]string, 0)
-	for _, vmset := range p.VmSets {
+	for _, vmset := range p.InstanceSets {
 		var gvm assets.GCloudVM
 		if err := ptypes.UnmarshalAny(
 			vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm); err != nil {
@@ -25,6 +25,9 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		vmcosts, err := vmCostRange(db, *vmset, gvm, pi)
 		if err != nil {
 			return nil, err
+		}
+		for idx, vc := range vmcosts {
+			vmcosts[idx] = append([]string{p.Name, vmset.Name}, vc...)
 		}
 		costs = append(costs, vmcosts...)
 	}
@@ -43,6 +46,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		dcosts = append([]string{p.Name, dset.Name}, dcosts...)
 		costs = append(costs, dcosts)
 	}
 	for _, img := range p.Images {
@@ -60,11 +64,12 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		icosts = append([]string{p.Name, img.Name}, icosts...)
 		costs = append(costs, icosts)
 	}
 	// Go over the vms again for networking. There will be one external IP
-	// per VM (well, per NIC, but ok). It can be static or external.
-	for _, vmset := range p.VmSets {
+	// per Instance (well, per NIC, but ok). It can be static or external.
+	for _, vmset := range p.InstanceSets {
 		// This assumes the addresses are all external.
 		addrSkus, _ := cache.GetSkusForIpAddress(db, "", false)
 		pi, _ := cache.GetPricingInfo(db, addrSkus)
@@ -72,12 +77,18 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		c = append([]string{p.Name, vmset.Name}, c...)
 		costs = append(costs, c)
 	}
 	for _, nw := range p.Networks {
 		for _, snw := range nw.Subnetworks {
 			ncosts := make([][]string, 2)
 			region, tier, _ := assets.SubnetworkRegionTier(*snw)
+			if region == "" {  // FIXME
+				fmt.Printf("Missing region in subnetwork %s:%s\n",
+				nw.Name, snw.Name)
+				region = "us-central1"
+			}
 			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
 				db, region, tier)
 			pi, _ := cache.GetPricingInfo(db, externalEgressSkus)
@@ -85,7 +96,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			ncosts[0] = c1
+			ncosts[0] = append([]string{p.Name, snw.Name}, c1...)
 			internalEgressSkus, _ := cache.GetSkusForInternalEgress(
 				db, region)
 			pi, _ = cache.GetPricingInfo(db, internalEgressSkus)
@@ -93,7 +104,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			ncosts[1] = c2
+			ncosts[1] = append([]string{p.Name, snw.Name}, c2...)
 			costs = append(costs, ncosts...)
 		}
 	}
@@ -159,7 +170,7 @@ func getTotalsForRate(
 	return maxTotal, expectedTotal, nil
 }
 
-func ipAddrCostRange(db *sql.DB, vm common.VMSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
+func ipAddrCostRange(db *sql.DB, vm common.InstanceSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
 	vmCount := vm.Count
 	usage := uint64(vm.UsageHoursPerMonth * vmCount)
 	maxUsage := uint64(30 * 24 * vmCount)
@@ -287,7 +298,8 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 	return nil, fmt.Errorf("no price found for disk")
 }
 
-func vmCostRange(db *sql.DB, vm common.VMSet, gvm assets.GCloudVM, pricing map[string](cache.PricingInfo)) ([][]string, error) {
+func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
+	pricing map[string](cache.PricingInfo)) ([][]string, error) {
 	mt, err := cache.GetMachineType(db, gvm.MachineType, gvm.Region)
 	if err != nil {
 		return nil, err
