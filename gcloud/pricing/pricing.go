@@ -179,7 +179,8 @@ func ipAddrCostRange(db *sql.DB, vm common.InstanceSet, pricing map[string](cach
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("attached to VM running %d h in %v", usage, vm.Template.Location.GlobalRegion)
+		spec := fmt.Sprintf("attached to VM running %d h in %v", usage,
+		common.PrintLocation(*vm.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"IP Address",
@@ -248,7 +249,8 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%d GB in %v", image.SizeGb, image.Location)
+		spec := fmt.Sprintf("%d GB in %s", image.SizeGb,
+		common.PrintLocation(*image.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"Image",
@@ -272,7 +274,7 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 	diskCount := disk.Count
 	sizeGb := disk.Template.ActualSizeGb
 	var maxUsage uint64
-	maxUsage = sizeGb * 30 * 24 * uint64(diskCount)
+	maxUsage = sizeGb * uint64(diskCount)
 	var projectedUsage uint64
 	projectedUsage = uint64(diskCount) * maxUsage * uint64(disk.PercentUsedAvg) / 100
 	for skuId, price := range pricing {
@@ -281,7 +283,9 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%d GB in %v", sizeGb, disk.Template.Location)
+		spec := fmt.Sprintf("%s in %s",
+		common.PrintDiskType(*disk.Template.Type),
+		common.PrintLocation(*disk.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		// Assume there is only one price
 		return []string{
@@ -337,7 +341,9 @@ func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%v in %v", vm.Template.Type, vm.Template.Location)
+		spec := fmt.Sprintf("%s in %s",
+		common.PrintMachineType(*vm.Template.Type),
+		common.PrintLocation(*vm.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		costs = append(costs, []string{
 			fmt.Sprintf("VM %s", resourceName),
