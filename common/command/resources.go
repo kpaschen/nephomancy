@@ -3,8 +3,11 @@ package command
 import (
 	"fmt"
 	"log"
+	"nephomancy/common/registry"
 	"nephomancy/common/resources"
 	"strings"
+	// The modules implementing providers have to be loaded
+	_ "nephomancy/gcloud"
 )
 
 type ResourcesCommand struct {
@@ -20,15 +23,15 @@ func (r *ResourcesCommand) Help() string {
 	Call this with no projectin parameter set, and you will get
 	a generic template file.
 
-	Not yet implemented:
-	Call it with a template file containing a spec and say which providers
+	Call it with a template file containing a spec and say which provider
 	you want to get provider details filled in.
 
         Options:
           --workingdir=path  %s
           --projectin=filename %s
           --projectout=filename %s
-`, workingDirDoc, projectInDoc, projectOutDoc)
+	  --provider=name %s
+`, workingDirDoc, projectInDoc, projectOutDoc, providerDoc)
 	return strings.TrimSpace(helpText)
 }
 
@@ -55,6 +58,28 @@ func (r *ResourcesCommand) Run(args []string) int {
 	} else {
 		project = resources.MakeSampleProject()
 	}
+
+	if r.provider != "" {
+		prov, err := registry.GetProvider(r.provider)
+		if err != nil {
+			log.Fatalf("Failed to get provider %s: %v\n", r.provider, err)
+		}
+		dd, err := r.DataDir()
+		if err != nil {
+			log.Fatalf("Failed to set up data directory: %v\n", err)
+		}
+		err = prov.Initialize(dd)
+		if err != nil {
+			log.Fatalf("Failed to initialize provider %s: %v\n", r.provider, err)
+		}
+
+		err = prov.ReconcileSpecAndProviderDetails(&project)
+		if err != nil {
+			log.Fatalf("Failed to fill in details for provider %s: %v\n",
+				r.provider, err)
+		}
+	}
+
 	if err = r.saveProject(&project); err != nil {
 		log.Fatalf("Failed to save project: %v\n", err)
 	}

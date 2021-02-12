@@ -84,9 +84,9 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		for _, snw := range nw.Subnetworks {
 			ncosts := make([][]string, 2)
 			region, tier, _ := assets.SubnetworkRegionTier(*snw)
-			if region == "" {  // FIXME
+			if region == "" { // FIXME
 				fmt.Printf("Missing region in subnetwork %s:%s\n",
-				nw.Name, snw.Name)
+					nw.Name, snw.Name)
 				region = "us-central1"
 			}
 			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
@@ -180,7 +180,7 @@ func ipAddrCostRange(db *sql.DB, vm common.InstanceSet, pricing map[string](cach
 			return nil, err
 		}
 		spec := fmt.Sprintf("attached to VM running %d h in %v", usage,
-		common.PrintLocation(*vm.Template.Location))
+			common.PrintLocation(*vm.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"IP Address",
@@ -250,7 +250,7 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 			return nil, err
 		}
 		spec := fmt.Sprintf("%d GB in %s", image.SizeGb,
-		common.PrintLocation(*image.Location))
+			common.PrintLocation(*image.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"Image",
@@ -284,8 +284,8 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 			return nil, err
 		}
 		spec := fmt.Sprintf("%s in %s",
-		common.PrintDiskType(*disk.Template.Type),
-		common.PrintLocation(*disk.Template.Location))
+			common.PrintDiskType(*disk.Template.Type),
+			common.PrintLocation(*disk.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		// Assume there is only one price
 		return []string{
@@ -342,8 +342,8 @@ func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 			return nil, err
 		}
 		spec := fmt.Sprintf("%s in %s",
-		common.PrintMachineType(*vm.Template.Type),
-		common.PrintLocation(*vm.Template.Location))
+			common.PrintMachineType(*vm.Template.Type),
+			common.PrintLocation(*vm.Template.Location))
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		costs = append(costs, []string{
 			fmt.Sprintf("VM %s", resourceName),

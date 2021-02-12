@@ -163,6 +163,7 @@ func (c *Command) DbHandle() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.dbHandle = db
 	return db, nil
 }
 

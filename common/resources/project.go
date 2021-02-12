@@ -56,7 +56,7 @@ func makeSampleDiskSet() *DiskSet {
 
 func makeSampleImage() *Image {
 	ret := &Image{
-		Name: "Sample Image",
+		Name:     "Sample Image",
 		Location: sampleLocation(),
 		SizeGb:   10,
 	}

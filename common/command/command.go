@@ -21,6 +21,8 @@ const projectOutDoc = `Filename to save project information to. Project informat
 
 const costReportDoc = `Filename to save cost report (csv) to.`
 
+const providerDoc = `Name of a cloud provider. A registry entry must exist for this provider. Supported providers are: gcloud, green.ch, custom.`
+
 type Command struct {
 	// All relative paths are relative to this directory.
 	// Defaults to current working directory but can be overridden
@@ -31,6 +33,9 @@ type Command struct {
 	// the workingDir value once I've verified the directory exists.
 	workingDirFlag string
 
+	// Directory with the cached price data.
+	dataDir string
+
 	// File to load a project from.
 	projectInFile string
 
@@ -39,6 +44,9 @@ type Command struct {
 
 	// File to write cost report to.
 	costReportFile string
+
+	// The provider to use.
+	provider string
 }
 
 // Create a flag set with flags common to most commands.
@@ -48,6 +56,7 @@ func (c *Command) defaultFlagSet(cn string) *flag.FlagSet {
 	f.StringVar(&c.projectOutFile, "projectout", "", "Where to save the project (json protobuf).")
 	f.StringVar(&c.projectInFile, "projectin", "", "Where to read the project from (json protobuf).")
 	f.StringVar(&c.costReportFile, "costreport", "", "Where to write the cost report (csv).")
+	f.StringVar(&c.provider, "provider", "", "Provider")
 	return f
 }
 
@@ -65,6 +74,23 @@ func (c *Command) WorkingDir() (string, error) {
 	}
 	c.workingDir = pwd
 	return c.workingDir, nil
+}
+
+func (c *Command) DataDir() (string, error) {
+	if c.dataDir != "" {
+		return c.dataDir, nil
+	}
+	wd, err := c.WorkingDir()
+	if err != nil {
+		return "", err
+	}
+	dd := filepath.Join(wd, ".nephomancy", "data")
+	err = os.MkdirAll(dd, 0777)
+	if err != nil {
+		return "", err
+	}
+	c.dataDir = dd
+	return c.dataDir, nil
 }
 
 func (c *Command) ProjectInFile() (string, error) {
