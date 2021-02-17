@@ -1,5 +1,27 @@
 package resources
 
+func GetProviderNames(p Project) []string {
+	providers := make(map[string]bool)
+	for _, is := range p.InstanceSets {
+		if is.Template != nil {
+			if is.Template.ProviderDetails != nil {
+				for pname, _ := range is.Template.ProviderDetails {
+					providers[pname] = true
+				}
+			}
+		}
+	}
+	// Should do the same for disks etc
+
+	ret := make([]string, len(providers))
+	idx := 0
+	for p, _ := range providers {
+		ret[idx] = p
+		idx++
+	}
+	return ret
+}
+
 func MakeSampleProject() Project {
 	ret := Project{
 		Name:         "Nephomancy sample project",

@@ -1,4 +1,4 @@
-package pricing
+package utils
 
 import (
 	"encoding/csv"

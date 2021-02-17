@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"log"
+	"nephomancy/common/utils"
 	"nephomancy/gcloud/assets"
 	"nephomancy/gcloud/cache"
 	pricing "nephomancy/gcloud/pricing"
@@ -85,7 +86,7 @@ func (c *CostCommand) Run(args []string) int {
 	if projectName == "" {
 		projectName = project.Name
 	}
-	reporter := pricing.CostReporter{}
+	reporter := utils.CostReporter{}
 	f, err := c.Command.getCostFile(projectName)
 	if err != nil {
 		log.Fatalf("Failed to create report file: %v", err)

@@ -7,6 +7,7 @@ import (
 	"nephomancy/common/registry"
 	"nephomancy/common/resources"
 	"nephomancy/gcloud/cache"
+	"nephomancy/gcloud/pricing"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,8 +30,11 @@ func (g *GcloudProvider) ReconcileSpecAndProviderDetails(p *resources.Project) e
 	return cache.ReconcileSpecAndAssets(g.dbHandle, p)
 }
 
-func (*GcloudProvider) GetCost(p *resources.Project) ([][]string, error) {
-	return nil, nil
+func (g *GcloudProvider) GetCost(p *resources.Project) ([][]string, error) {
+	if g.dbHandle == nil {
+		return nil, fmt.Errorf("Provider has not been initialized\n")
+	}
+	return pricing.GetCost(g.dbHandle, p)
 }
 
 func init() {

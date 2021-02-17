@@ -25,7 +25,7 @@ func PrintLocation(l Location) string {
 
 func PrintMachineType(m MachineType) string {
 	if m.GpuCount > 0 {
-		return fmt.Sprintf("%d gpus, %d cpus, % gb memory",
+		return fmt.Sprintf("%d gpus, %d cpus, %d gb memory",
 			m.GpuCount, m.CpuCount, m.MemoryGb)
 	} else {
 		return fmt.Sprintf("%d cpus, %d gb memory",
