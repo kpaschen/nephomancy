@@ -74,7 +74,7 @@ func (r *ResourcesCommand) Run(args []string) int {
 			log.Fatalf("Failed to initialize provider %s: %v\n", r.provider, err)
 		}
 
-		err = prov.ReconcileSpecAndProviderDetails(&project)
+		err = prov.FillInProviderDetails(&project)
 		if err != nil {
 			log.Fatalf("Failed to fill in details for provider %s: %v\n",
 				r.provider, err)

@@ -6,7 +6,7 @@ import (
 )
 
 type Provider interface {
-	ReconcileSpecAndProviderDetails(*resources.Project) error
+	FillInProviderDetails(*resources.Project) error
 	GetCost(*resources.Project) ([][]string, error)
 	Initialize(datadir string) error
 }
@@ -34,7 +34,7 @@ func GetProvider(name string) (Provider, error) {
 
 type emptyProvider struct {}
 
-func (emptyProvider) ReconcileSpecAndProviderDetails(*resources.Project) error {
+func (emptyProvider) FillInProviderDetails(*resources.Project) error {
 	return nil
 }
 

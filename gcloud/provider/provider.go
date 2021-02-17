@@ -23,11 +23,11 @@ var instance registry.Provider = &GcloudProvider{}
 
 const name = "gcloud"
 
-func (g *GcloudProvider) ReconcileSpecAndProviderDetails(p *resources.Project) error {
+func (g *GcloudProvider) FillInProviderDetails(p *resources.Project) error {
 	if g.dbHandle == nil {
 		return fmt.Errorf("Provider has not been initialized\n")
 	}
-	return cache.ReconcileSpecAndAssets(g.dbHandle, p)
+	return cache.FillInProviderDetails(g.dbHandle, p)
 }
 
 func (g *GcloudProvider) GetCost(p *resources.Project) ([][]string, error) {

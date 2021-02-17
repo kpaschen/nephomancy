@@ -58,62 +58,46 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 	return nil
 }
 
-// Populates provider-specific details from spec if the details are empty.
-// Populates spec from provider details if the spec is empty.
-// Checks consistency if neither spec nor details are empty.
-func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
+// Populates provider-specific details from spec if they are empty.
+// If they are not empty, they will be left as they were, but the tool
+// will log a warning message.
+func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	for _, vmset := range p.InstanceSets {
+		if vmset.Template.Location == nil {
+			return fmt.Errorf("missing vmset location information\n")
+		}
+		if vmset.Template.Type == nil {
+			return fmt.Errorf("missing vmset template information\n")
+		}
 		if vmset.Template.ProviderDetails == nil {
 			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
 		}
-		// If there are provider details
+                // Special case: there already are provider details.
+		// Make sure they are consistent, otherwise print a warning.
 		if vmset.Template.ProviderDetails[assets.GcloudProvider] != nil {
+			fmt.Printf("I have a template\n")
 			var gvm assets.GCloudVM
 			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm)
-			if err != nil {
-				return err
-			}
-			loc, err := resolveLocation(gvm.Region)
 			if err != nil {
 				return err
 			}
 			if err = checkVmSpec(db, gvm, *vmset.Template); err != nil {
 				return err
 			}
-			mt, err := GetMachineType(db, gvm.MachineType, gvm.Region)
-			if err != nil {
-				return err
-			}
-			if vmset.Template.Location == nil {
-				vmset.Template.Location = &loc
-			}
-			if vmset.Template.Type == nil {
-				vmset.Template.Type = &common.MachineType{
-					CpuCount: mt.CpuCount,
-					MemoryGb: uint32(mt.MemoryMb / 1000),
-					GpuCount: mt.GpuCount,
-				}
-			}
-			if vmset.UsageHoursPerMonth == 0 {
-				vmset.UsageHoursPerMonth = 24 * 30 // full usage
-			}
+			fmt.Printf("already have details\n")
+			log.Printf("Instance Set %s already has details for provider %s, leaving them as they are.\n",
+			vmset.Name, assets.GcloudProvider)
 		} else { // There are no provider details
-			if vmset.Template.Location == nil {
-				return fmt.Errorf("missing vmset location information\n")
-			}
-			if vmset.Template.Type == nil {
-				return fmt.Errorf("missing vmset template information\n")
-			}
-			// Get regions for spec location.
 			regions := resolveSpecLocation(*vmset.Template.Location)
 			if len(regions) == 0 {
-				return fmt.Errorf("provider %s does not support regions matching location %v", assets.GcloudProvider, vmset.Template.Location)
+				return fmt.Errorf(
+					"provider %s does not support regions matching location %v",
+					assets.GcloudProvider, vmset.Template.Location)
 			}
 			mt, r, err := getMachineTypeBySpec(db, *vmset.Template.Type, regions)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("got machine type %s in regions %v\n", mt, r)
 			details, err := ptypes.MarshalAny(&assets.GCloudVM{
 				MachineType: mt,
 				Region:      r[0], // only using first region
@@ -125,51 +109,29 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 		}
 	}
 	for _, dset := range p.DiskSets {
+		if dset.Template.Location == nil {
+			return fmt.Errorf("missing diskset location information")
+		}
+		if dset.Template.Type == nil {
+			return fmt.Errorf("missing diskset template information")
+		}
 		if dset.Template.ProviderDetails == nil {
 			dset.Template.ProviderDetails = make(map[string](*anypb.Any))
 		}
 		if dset.Template.ProviderDetails[assets.GcloudProvider] != nil {
-			// If there are provider details, use them.
+			// If there are provider details, just check consistency.
 			var dsk assets.GCloudDisk
-			err := ptypes.UnmarshalAny(
-				dset.Template.ProviderDetails[assets.GcloudProvider], &dsk)
-			if err != nil {
+			if err := ptypes.UnmarshalAny(
+				dset.Template.ProviderDetails[assets.GcloudProvider],
+				&dsk); err != nil {
+					return err
+			}
+			if err := checkDiskSpec(db, dsk, *dset.Template); err != nil {
 				return err
 			}
-			loc, err := resolveLocation(dsk.Region)
-			if err != nil {
-				return err
-			}
-			if err = checkDiskSpec(db, dsk, *dset.Template); err != nil {
-				return err
-			}
-			dt, err := getDiskType(db, dsk.DiskType, dsk.Region)
-			if err != nil {
-				return err
-			}
-			if dset.Template.Location == nil {
-				dset.Template.Location = &loc
-			}
-			tech := "SSD"
-			if dsk.DiskType == "pd-standard" {
-				tech = "Standard"
-			}
-			if dset.Template.Type == nil {
-				dset.Template.Type = &common.DiskType{
-					DiskTech: tech,
-					SizeGb:   uint32(dt.DefaultSizeGb),
-				}
-			}
-			if dset.PercentUsedAvg == 0 {
-				dset.PercentUsedAvg = 100 // full usage
-			}
-		} else { // There are no provider details
-			if dset.Template.Location == nil {
-				return fmt.Errorf("missing diskset location information")
-			}
-			if dset.Template.Type == nil {
-				return fmt.Errorf("missing diskset template information")
-			}
+			log.Printf("Disk Set %s already has details for provider %s, leaving them as they are.\n",
+			dset.Name, assets.GcloudProvider)
+		} else { // There are no provider details yet.
 			// Get regions for spec location.
 			regions := resolveSpecLocation(*dset.Template.Location)
 			if len(regions) == 0 {
@@ -179,7 +141,6 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("got disk type %s in regions %v\n", dt, r)
 			details, err := ptypes.MarshalAny(&assets.GCloudDisk{
 				DiskType: dt,
 				Region:   r[0], // only using first region
@@ -191,6 +152,9 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 		}
 	}
 	for _, img := range p.Images {
+		if img.Location == nil {
+			return fmt.Errorf("missing image location information")
+		}
 		if img.ProviderDetails == nil {
 			img.ProviderDetails = make(map[string](*anypb.Any))
 		}
@@ -212,9 +176,6 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 				img.Location = &loc
 			}
 		} else { // No provider details yet
-			if img.Location == nil {
-				return fmt.Errorf("missing image location information")
-			}
 			regions := resolveSpecLocation(*img.Location)
 			if len(regions) == 0 {
 				return fmt.Errorf("provider %s does not support regions matching location %v", assets.GcloudProvider, img.Location)
@@ -227,6 +188,102 @@ func ReconcileSpecAndAssets(db *sql.DB, p *common.Project) error {
 			}
 			img.ProviderDetails[assets.GcloudProvider] = details
 		}
+	}
+	return nil
+}
+
+// Populates spec from provider details if the spec is empty.
+func FillInSpec(db *sql.DB, p *common.Project) error {
+	for _, vmset := range p.InstanceSets {
+		if vmset.Template.ProviderDetails == nil {
+			return fmt.Errorf("Missing provider details for instance set %s\n",
+			vmset.Name)
+		}
+		var gvm assets.GCloudVM
+		err := ptypes.UnmarshalAny(
+			vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm)
+		if err != nil {
+			return err
+		}
+		if err = checkVmSpec(db, gvm, *vmset.Template); err != nil {
+			return err
+		}
+		mt, err := GetMachineType(db, gvm.MachineType, gvm.Region)
+		if err != nil {
+			return err
+		}
+		if vmset.Template.Location == nil {
+			loc, err := resolveLocation(gvm.Region)
+			if err != nil {
+				return err
+			}
+			vmset.Template.Location = &loc
+		}
+		if vmset.Template.Type == nil {
+			vmset.Template.Type = &common.MachineType{
+				CpuCount: mt.CpuCount,
+				MemoryGb: uint32(mt.MemoryMb / 1000),
+				GpuCount: mt.GpuCount,
+			}
+		}
+		if vmset.UsageHoursPerMonth == 0 {
+			vmset.UsageHoursPerMonth = 24 * 30 // full usage
+		}
+	}
+	for _, dset := range p.DiskSets {
+		if dset.Template.ProviderDetails == nil {
+			return fmt.Errorf("Missing provider details for disk set %s\n",
+			dset.Name)
+		}
+		var dsk assets.GCloudDisk
+		err := ptypes.UnmarshalAny(
+			dset.Template.ProviderDetails[assets.GcloudProvider], &dsk)
+		if err != nil {
+			return err
+		}
+		dt, err := getDiskType(db, dsk.DiskType, dsk.Region)
+		if err != nil {
+			return err
+		}
+		if dset.Template.Location == nil {
+			loc, err := resolveLocation(dsk.Region)
+			if err != nil {
+				return err
+			}
+			dset.Template.Location = &loc
+		}
+		if dset.Template.Type == nil {
+			tech := "SSD"
+			if dsk.DiskType == "pd-standard" {
+				tech = "Standard"
+			}
+			dset.Template.Type = &common.DiskType{
+				DiskTech: tech,
+				SizeGb:   uint32(dt.DefaultSizeGb),
+			}
+		}
+		if dset.PercentUsedAvg == 0 {
+			dset.PercentUsedAvg = 100 // full usage
+		}
+	}
+	for _, img := range p.Images {
+		if img.ProviderDetails == nil {
+			return fmt.Errorf("Missing provider details for image %s\n",
+			img.Name)
+		}
+		var gi assets.GCloudImage
+		err := ptypes.UnmarshalAny(img.ProviderDetails[assets.GcloudProvider], &gi)
+		if err != nil {
+			return err
+		}
+		if img.Location == nil {
+			loc, err := resolveLocation(gi.Region)
+			if err != nil {
+				return err
+			}
+			img.Location = &loc
+		}
+		// Not enough data here for filling in the size etc.
 	}
 	return nil
 }

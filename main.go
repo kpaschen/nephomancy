@@ -18,9 +18,6 @@ func main() {
 		"cost": func() (cli.Command, error) {
 			return &command.CostCommand{}, nil
 		},
-		"gcloud cost": func() (cli.Command, error) {
-			return &gcmds.CostCommand{}, nil
-		},
 		"gcloud init": func() (cli.Command, error) {
 			return &gcmds.InitCommand{}, nil
 		},
