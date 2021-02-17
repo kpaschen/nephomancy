@@ -7,7 +7,8 @@ import (
 	"nephomancy/common/resources"
 	"strings"
 	// The modules implementing providers have to be loaded
-	_ "nephomancy/gcloud"
+	_ "nephomancy/gcloud/provider"
+	_ "nephomancy/aws/provider"
 )
 
 type ResourcesCommand struct {

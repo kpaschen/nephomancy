@@ -1,4 +1,4 @@
-package gcloud
+package provider
 
 import (
 	"database/sql"
