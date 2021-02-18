@@ -37,4 +37,3 @@ func (p *AwsProvider) Initialize(datadir string) error {
 	}
 	return nil
 }
-

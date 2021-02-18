@@ -27,7 +27,4 @@ message GCloudSubnetwork {
   string region = 2;
 }
 
-message GCloudImage {
-  string region = 1;
-}
 

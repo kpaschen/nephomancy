@@ -48,24 +48,21 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		}
 		dcosts = append([]string{p.Name, dset.Name}, dcosts...)
 		costs = append(costs, dcosts)
-	}
-	for _, img := range p.Images {
-		var gi assets.GCloudImage
-		if err := ptypes.UnmarshalAny(
-			img.ProviderDetails[assets.GcloudProvider], &gi); err != nil {
-			return nil, err
+
+		if dset.Template.Image != nil {
+			skus, _ := cache.GetSkusForImage(db, gdsk)
+			pi, err := cache.GetPricingInfo(db, skus)
+			if err != nil {
+				return nil, err
+			}
+			icosts, err := imageCost(db, *dset.Template.Image, pi)
+			if err != nil {
+				return nil, err
+			}
+			icosts = append([]string{p.Name, dset.Template.Image.Name},
+				icosts...)
+			costs = append(costs, icosts)
 		}
-		skus, _ := cache.GetSkusForImage(db, gi)
-		pi, err := cache.GetPricingInfo(db, skus)
-		if err != nil {
-			return nil, err
-		}
-		icosts, err := imageCost(db, *img, pi)
-		if err != nil {
-			return nil, err
-		}
-		icosts = append([]string{p.Name, img.Name}, icosts...)
-		costs = append(costs, icosts)
 	}
 	// Go over the vms again for networking. There will be one external IP
 	// per Instance (well, per NIC, but ok). It can be static or external.
@@ -249,8 +246,7 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("%d GB in %s", image.SizeGb,
-			common.PrintLocation(*image.Location))
+		spec := fmt.Sprintf("%d GB", image.SizeGb)
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"Image",

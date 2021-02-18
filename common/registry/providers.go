@@ -32,7 +32,7 @@ func GetProvider(name string) (Provider, error) {
 	return Registry[name], nil
 }
 
-type emptyProvider struct {}
+type emptyProvider struct{}
 
 func (emptyProvider) FillInProviderDetails(*resources.Project) error {
 	return nil

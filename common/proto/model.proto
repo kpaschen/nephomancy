@@ -40,7 +40,6 @@ message DiskType {
 message Image {
   string name = 1;
   uint32 size_gb = 2;
-  Location location = 3;
   map<string, google.protobuf.Any> provider_details = 4;
 }
 
@@ -87,8 +86,10 @@ message Disk {
   // the size in the disk type is the maximum size for the disk. The actual
   // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
   uint64 actual_size_gb = 3;
+  // For now, a disk can have 0 or 1 image on it.
+  Image image = 4;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 4;
+  map<string, google.protobuf.Any> provider_details = 5;
 }
 
 // Disks with the same location, type, and actual size
@@ -133,13 +134,9 @@ message Network {
   map<string, google.protobuf.Any> provider_details = 3;
 }
 
-// TODO: maybe have disks, images, some network stuff nested under InstanceSet.
-// then all the compute stuff would be together, and it would be easier to express
-// dependencies.
 message Project {
   string name = 1;
   repeated InstanceSet instance_sets = 2;
   repeated DiskSet disk_sets = 3;
-  repeated Image images = 4;
   repeated Network networks = 5;
 }

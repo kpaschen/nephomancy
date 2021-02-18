@@ -27,7 +27,6 @@ func MakeSampleProject() Project {
 		Name:         "Nephomancy sample project",
 		InstanceSets: []*InstanceSet{makeSampleInstanceSet()},
 		DiskSets:     []*DiskSet{makeSampleDiskSet()},
-		Images:       []*Image{makeSampleImage()},
 		Networks:     []*Network{makeSampleNetwork()},
 	}
 	return ret
@@ -68,6 +67,7 @@ func makeSampleDiskSet() *DiskSet {
 				SizeGb:   100,
 				DiskTech: "SSD",
 			},
+			Image:        makeSampleImage(),
 			ActualSizeGb: 100,
 		},
 		Count:          1,
@@ -78,9 +78,8 @@ func makeSampleDiskSet() *DiskSet {
 
 func makeSampleImage() *Image {
 	ret := &Image{
-		Name:     "Sample Image",
-		Location: sampleLocation(),
-		SizeGb:   10,
+		Name:   "Sample Image",
+		SizeGb: 10,
 	}
 	return ret
 }

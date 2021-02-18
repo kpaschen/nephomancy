@@ -20,13 +20,23 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 	return p, nil
 }
 
+type ProjectInProgress struct {
+	project        *common.Project
+	danglingImages map[string]common.Image
+	danglingDisks  map[string][]common.Disk
+}
+
 // BuildProject takes a list of small assets and create a project proto
 // containing lists of instance sets, disk sets, and images.
 func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	p := &common.Project{
 		InstanceSets: make([]*common.InstanceSet, 0),
 		DiskSets:     make([]*common.DiskSet, 0),
-		Images:       make([]*common.Image, 0),
+	}
+	pip := &ProjectInProgress{
+		project:        p,
+		danglingImages: make(map[string](common.Image)),
+		danglingDisks:  make(map[string]([]common.Disk)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -72,7 +82,11 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				if err != nil {
 					return nil, err
 				}
-				if err = addImageToProject(p, img); err != nil {
+				sourceDisk, _ := as.resourceMap["sourceDisk"].(string)
+				fmt.Printf("source disk: %s\n", sourceDisk)
+				parts := strings.Split(sourceDisk, "/")
+				sd := parts[len(parts)-1]
+				if err = addImageToProject(pip, img, sd); err != nil {
 					return nil, err
 				}
 			}
@@ -130,6 +144,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			fmt.Printf("type %s not handled yet\n", bt)
 		}
 	}
+	// TODO: resolve other dangling items here
 	if err := pruneSubnetworks(p); err != nil {
 		return nil, err
 	}
@@ -426,24 +441,17 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 }
 
 func createImage(a SmallAsset) (*common.Image, error) {
-	// Not handling licenses yet (or maybe ever).
+	// Not handling licenses yet.
 	size, _ := a.storageSize()
-	regions, _ := a.regions()
-	if len(regions) != 1 {
-		return nil, fmt.Errorf("unexpected number of regions in image: %v", regions)
-	}
-	details, _ := ptypes.MarshalAny(&GCloudImage{
-		Region: regions[0],
-	})
+	name, _ := a.resourceMap["name"].(string)
 	return &common.Image{
+		Name:   name,
 		SizeGb: uint32(size),
-		ProviderDetails: map[string]*anypb.Any{
-			GcloudProvider: details,
-		},
 	}, nil
 }
 
-func addImageToProject(p *common.Project, img *common.Image) error {
-	p.Images = append(p.Images, img)
+func addImageToProject(p *ProjectInProgress, img *common.Image, sourceDisk string) error {
+	// TODO: look for matching disk
+	p.danglingImages[sourceDisk] = *img
 	return nil
 }

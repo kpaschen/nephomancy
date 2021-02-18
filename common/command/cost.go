@@ -8,8 +8,8 @@ import (
 	"nephomancy/common/utils"
 	"strings"
 	// The modules implementing providers have to be loaded
-	_ "nephomancy/gcloud/provider"
 	_ "nephomancy/aws/provider"
+	_ "nephomancy/gcloud/provider"
 )
 
 type CostCommand struct {
@@ -98,7 +98,7 @@ func (r *CostCommand) Run(args []string) int {
 		for _, c := range costs {
 			if err = reporter.AddLine(c); err != nil {
 				log.Fatalf("Failed to report cost line %+v: %v\n",
-				c, err)
+					c, err)
 			}
 		}
 	}

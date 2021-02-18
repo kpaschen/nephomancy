@@ -161,9 +161,9 @@ func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	return getSkusForQuery(db, querySku.String())
 }
 
-func GetSkusForImage(db *sql.DB, image assets.GCloudImage) ([]string, error) {
+func GetSkusForImage(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }

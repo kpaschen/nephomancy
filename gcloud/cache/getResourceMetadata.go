@@ -55,6 +55,7 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 				assets.GcloudProvider, dt, t)
 		}
 	}
+	fmt.Printf("TODO: compare image settings of spec and gcloud disk here\n")
 	return nil
 }
 
@@ -72,7 +73,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		if vmset.Template.ProviderDetails == nil {
 			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
 		}
-                // Special case: there already are provider details.
+		// Special case: there already are provider details.
 		// Make sure they are consistent, otherwise print a warning.
 		if vmset.Template.ProviderDetails[assets.GcloudProvider] != nil {
 			fmt.Printf("I have a template\n")
@@ -86,7 +87,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			}
 			fmt.Printf("already have details\n")
 			log.Printf("Instance Set %s already has details for provider %s, leaving them as they are.\n",
-			vmset.Name, assets.GcloudProvider)
+				vmset.Name, assets.GcloudProvider)
 		} else { // There are no provider details
 			regions := resolveSpecLocation(*vmset.Template.Location)
 			if len(regions) == 0 {
@@ -124,13 +125,13 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err := ptypes.UnmarshalAny(
 				dset.Template.ProviderDetails[assets.GcloudProvider],
 				&dsk); err != nil {
-					return err
+				return err
 			}
 			if err := checkDiskSpec(db, dsk, *dset.Template); err != nil {
 				return err
 			}
 			log.Printf("Disk Set %s already has details for provider %s, leaving them as they are.\n",
-			dset.Name, assets.GcloudProvider)
+				dset.Name, assets.GcloudProvider)
 		} else { // There are no provider details yet.
 			// Get regions for spec location.
 			regions := resolveSpecLocation(*dset.Template.Location)
@@ -141,6 +142,13 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
+			/*
+				if dset.Template.Image != nil {
+					// Template.Image should have a name and a sizeGb.
+					// There are no gcloud-specific settings for
+					// images so far.
+				}
+			*/
 			details, err := ptypes.MarshalAny(&assets.GCloudDisk{
 				DiskType: dt,
 				Region:   r[0], // only using first region
@@ -151,44 +159,6 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			dset.Template.ProviderDetails[assets.GcloudProvider] = details
 		}
 	}
-	for _, img := range p.Images {
-		if img.Location == nil {
-			return fmt.Errorf("missing image location information")
-		}
-		if img.ProviderDetails == nil {
-			img.ProviderDetails = make(map[string](*anypb.Any))
-		}
-		if img.ProviderDetails[assets.GcloudProvider] != nil {
-			var gi assets.GCloudImage
-			err := ptypes.UnmarshalAny(img.ProviderDetails[assets.GcloudProvider], &gi)
-			if err != nil {
-				return err
-			}
-			if l := img.Location; l != nil {
-				if err = checkLocation(gi.Region, *l); err != nil {
-					return err
-				}
-			} else {
-				loc, err := resolveLocation(gi.Region)
-				if err != nil {
-					return err
-				}
-				img.Location = &loc
-			}
-		} else { // No provider details yet
-			regions := resolveSpecLocation(*img.Location)
-			if len(regions) == 0 {
-				return fmt.Errorf("provider %s does not support regions matching location %v", assets.GcloudProvider, img.Location)
-			}
-			details, err := ptypes.MarshalAny(&assets.GCloudImage{
-				Region: regions[0], // only using first region
-			})
-			if err != nil {
-				return err
-			}
-			img.ProviderDetails[assets.GcloudProvider] = details
-		}
-	}
 	return nil
 }
 
@@ -197,7 +167,7 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 	for _, vmset := range p.InstanceSets {
 		if vmset.Template.ProviderDetails == nil {
 			return fmt.Errorf("Missing provider details for instance set %s\n",
-			vmset.Name)
+				vmset.Name)
 		}
 		var gvm assets.GCloudVM
 		err := ptypes.UnmarshalAny(
@@ -233,7 +203,7 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 	for _, dset := range p.DiskSets {
 		if dset.Template.ProviderDetails == nil {
 			return fmt.Errorf("Missing provider details for disk set %s\n",
-			dset.Name)
+				dset.Name)
 		}
 		var dsk assets.GCloudDisk
 		err := ptypes.UnmarshalAny(
@@ -265,25 +235,6 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 		if dset.PercentUsedAvg == 0 {
 			dset.PercentUsedAvg = 100 // full usage
 		}
-	}
-	for _, img := range p.Images {
-		if img.ProviderDetails == nil {
-			return fmt.Errorf("Missing provider details for image %s\n",
-			img.Name)
-		}
-		var gi assets.GCloudImage
-		err := ptypes.UnmarshalAny(img.ProviderDetails[assets.GcloudProvider], &gi)
-		if err != nil {
-			return err
-		}
-		if img.Location == nil {
-			loc, err := resolveLocation(gi.Region)
-			if err != nil {
-				return err
-			}
-			img.Location = &loc
-		}
-		// Not enough data here for filling in the size etc.
 	}
 	return nil
 }
