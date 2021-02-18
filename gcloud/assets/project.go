@@ -22,8 +22,10 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 
 type ProjectInProgress struct {
 	project        *common.Project
-	danglingImages map[string]common.Image
-	danglingDisks  map[string][]common.Disk
+	// Map long name of disk to image
+	danglingImages map[string]*common.Image
+	// Map long name of disk to disk
+	danglingDisks  map[string]*common.Disk
 }
 
 // BuildProject takes a list of small assets and create a project proto
@@ -35,8 +37,8 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	}
 	pip := &ProjectInProgress{
 		project:        p,
-		danglingImages: make(map[string](common.Image)),
-		danglingDisks:  make(map[string]([]common.Disk)),
+		danglingImages: make(map[string](*common.Image)),
+		danglingDisks:  make(map[string](*common.Disk)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -58,21 +60,21 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			}
 		case "Disk":
 			{
-				d, err := createDisk(as, false)
+				d, name, err := createDisk(as, false)
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(p, d); err != nil {
+				if err = addDiskToProject(pip, name, d); err != nil {
 					return nil, err
 				}
 			}
 		case "RegionDisk":
 			{
-				d, err := createDisk(as, true)
+				d, name, err := createDisk(as, true)
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(p, d); err != nil {
+				if err = addDiskToProject(pip, name, d); err != nil {
 					return nil, err
 				}
 			}
@@ -83,10 +85,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 					return nil, err
 				}
 				sourceDisk, _ := as.resourceMap["sourceDisk"].(string)
-				fmt.Printf("source disk: %s\n", sourceDisk)
-				parts := strings.Split(sourceDisk, "/")
-				sd := parts[len(parts)-1]
-				if err = addImageToProject(pip, img, sd); err != nil {
+				if err = addImageToProject(pip, img, sourceDisk); err != nil {
 					return nil, err
 				}
 			}
@@ -145,6 +144,9 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		}
 	}
 	// TODO: resolve other dangling items here
+	if err := resolveDanglingImages(pip); err != nil {
+		return nil, err
+	}
 	if err := pruneSubnetworks(p); err != nil {
 		return nil, err
 	}
@@ -188,6 +190,17 @@ func vmNetworkTier(instance common.Instance) (string, error) {
 		return "STANDARD", nil
 	}
 	return gvm.NetworkTier, nil
+}
+
+func resolveDanglingImages(pip *ProjectInProgress) error {
+	for diskName, img := range pip.danglingImages {
+		if pip.danglingDisks[diskName] == nil {
+			return fmt.Errorf("missing disk %s for image %+v\n",
+			diskName, img)
+		}
+		pip.danglingDisks[diskName].Image = img
+	}
+	return nil
 }
 
 func pruneSubnetworks(p *common.Project) error {
@@ -367,12 +380,14 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	return &ret, nil
 }
 
-func addDiskToProject(p *common.Project, dsk *common.Disk) error {
+func addDiskToProject(pip *ProjectInProgress, name string, dsk *common.Disk) error {
+	// TODO: fingerprinting has to come during consolidation after attaching
+	// images. take images into account for fp.
 	fp, err := fingerprintDisk(*dsk)
 	if err != nil {
 		return err
 	}
-	for _, dskSet := range p.DiskSets {
+	for _, dskSet := range pip.project.DiskSets {
 		f, _ := fingerprintDisk(*dskSet.Template)
 		if f == fp {
 			dskSet.Count++
@@ -384,7 +399,8 @@ func addDiskToProject(p *common.Project, dsk *common.Disk) error {
 		Template: dsk,
 		Count:    1,
 	}
-	p.DiskSets = append(p.DiskSets, &dset)
+	pip.project.DiskSets = append(pip.project.DiskSets, &dset)
+	pip.danglingDisks[name] = dsk
 	return nil
 }
 
@@ -409,15 +425,15 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 	return fp.String(), nil
 }
 
-func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
+func createDisk(a SmallAsset, isRegional bool) (*common.Disk, string, error) {
 	regions, err := a.regions()
 	if err != nil || len(regions) == 0 {
-		return nil, fmt.Errorf("missing both zone and region for disk %+v", a)
+		return nil, "", fmt.Errorf("missing both zone and region for disk %+v", a)
 	}
 	if len(regions) > 1 {
 		// This is probably not an error, i just need to decide how
 		// to handle it.
-		return nil, fmt.Errorf("multiple regions for a disk? %+v", a)
+		return nil, "",  fmt.Errorf("multiple regions for a disk? %+v", a)
 	}
 	sizeGB, _ := a.storageSize()
 	zone, _ := a.zone()
@@ -429,7 +445,7 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 		Zone:       zone,
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	ret := common.Disk{
 		ActualSizeGb: uint64(sizeGB),
@@ -437,21 +453,19 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 			GcloudProvider: details,
 		},
 	}
-	return &ret, nil
+	longName, _ := a.resourceMap["selfLink"].(string)
+	return &ret, longName, nil
 }
 
 func createImage(a SmallAsset) (*common.Image, error) {
 	// Not handling licenses yet.
 	size, _ := a.storageSize()
-	name, _ := a.resourceMap["name"].(string)
 	return &common.Image{
-		Name:   name,
 		SizeGb: uint32(size),
 	}, nil
 }
 
 func addImageToProject(p *ProjectInProgress, img *common.Image, sourceDisk string) error {
-	// TODO: look for matching disk
-	p.danglingImages[sourceDisk] = *img
+	p.danglingImages[sourceDisk] = img
 	return nil
 }
