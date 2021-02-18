@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/mitchellh/cli"
 	"log"
+	"nephomancy/common/command"
 	gcmds "nephomancy/gcloud/command"
 	"os"
 )
@@ -11,8 +12,11 @@ func main() {
 	c := cli.NewCLI("nephomancy", "0.0.1") // TODO: get version from a file
 	c.Args = os.Args[1:]
 	c.Commands = map[string]cli.CommandFactory{
-		"gcloud cost": func() (cli.Command, error) {
-			return &gcmds.CostCommand{}, nil
+		"resources": func() (cli.Command, error) {
+			return &command.ResourcesCommand{}, nil
+		},
+		"cost": func() (cli.Command, error) {
+			return &command.CostCommand{}, nil
 		},
 		"gcloud init": func() (cli.Command, error) {
 			return &gcmds.InitCommand{}, nil

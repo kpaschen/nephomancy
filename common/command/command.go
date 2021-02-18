@@ -1,29 +1,27 @@
 package command
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"github.com/kennygrant/sanitize"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io/ioutil"
 	"log"
-	common "nephomancy/common/resources"
-	"nephomancy/gcloud/assets"
+	"nephomancy/common/resources"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-const projectDoc = `ID of a gcloud project. The user you are authenticating as must have access to this project. The billing, compute, asset, and monitoring APIs must be enabled for this project, and your user must be authorized to use them.`
-
 const workingDirDoc = `Path to working directory. Defaults to current working directory. A data directory called .nephomancy/gcloud/data will be created underneath this working directory if it does not exist yet.`
 
-const projectInDoc = `Filename to read project information from. This is an alternative to specifying the ID of a gcloud project. The project is expected to be represented as a json-encoded protocol buffer. You can obtain a template by saving an existing project using the projectout parameter.`
+const projectInDoc = `Filename to read project information from. If this flag is not set, a generic template project will be created. If this flag is set, the project is expected to be represented as a json-encoded protocol buffer.`
 
 const projectOutDoc = `Filename to save project information to. Project information will be written as a json-encoded protocol buffer.`
 
 const costReportDoc = `Filename to save cost report (csv) to.`
+
+const providerDoc = `Name of a cloud provider. A registry entry must exist for this provider. Supported providers are: gcloud, green.ch, custom.`
 
 type Command struct {
 	// All relative paths are relative to this directory.
@@ -31,21 +29,12 @@ type Command struct {
 	// with the --workingdir flag.
 	workingDir string
 
-	// The directory where the database file and other internals are kept.
-	dataDir string
-
-	// The filename where the database is stored.
-	dbFile string
-
-	// The gcloud project to pass into APIs that require a project.
-	Project string
-
 	// This is the original working dir flag value. I should probably only initialize
 	// the workingDir value once I've verified the directory exists.
 	workingDirFlag string
 
-	// Internal handle for sqlite database holding the sku cache.
-	dbHandle *sql.DB
+	// Directory with the cached price data.
+	dataDir string
 
 	// File to load a project from.
 	projectInFile string
@@ -55,16 +44,19 @@ type Command struct {
 
 	// File to write cost report to.
 	costReportFile string
+
+	// The provider to use.
+	provider string
 }
 
 // Create a flag set with flags common to most commands.
 func (c *Command) defaultFlagSet(cn string) *flag.FlagSet {
 	f := flag.NewFlagSet(cn, flag.ExitOnError)
 	f.StringVar(&c.workingDirFlag, "workingdir", "", "Working Directory. Defaults to current working directory.")
-	f.StringVar(&c.Project, "project", "", "The name of the gcloud project to use for API access.")
 	f.StringVar(&c.projectOutFile, "projectout", "", "Where to save the project (json protobuf).")
 	f.StringVar(&c.projectInFile, "projectin", "", "Where to read the project from (json protobuf).")
 	f.StringVar(&c.costReportFile, "costreport", "", "Where to write the cost report (csv).")
+	f.StringVar(&c.provider, "provider", "", "Provider")
 	return f
 }
 
@@ -92,21 +84,13 @@ func (c *Command) DataDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dd := filepath.Join(wd, ".nephomancy", "gcloud", "data")
+	dd := filepath.Join(wd, ".nephomancy", "data")
 	err = os.MkdirAll(dd, 0777)
 	if err != nil {
 		return "", err
 	}
 	c.dataDir = dd
 	return c.dataDir, nil
-}
-
-func (c *Command) DbFile() (string, error) {
-	dd, err := c.DataDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dd, "sku-cache.db"), nil
 }
 
 func (c *Command) ProjectInFile() (string, error) {
@@ -151,34 +135,7 @@ func (c *Command) CostReportFile(fallback string) (string, error) {
 	return filepath.Join(wd, outfile), nil
 }
 
-func (c *Command) DbHandle() (*sql.DB, error) {
-	if c.dbHandle != nil {
-		return c.dbHandle, nil
-	}
-	f, err := c.DbFile()
-	if err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite3", f)
-	if err != nil {
-		return nil, err
-	}
-	c.dbHandle = db
-	return db, nil
-}
-
-func (c *Command) CloseDb() error {
-	if c.dbHandle == nil {
-		return nil
-	}
-	err := c.dbHandle.Close()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Command) loadProject() (*common.Project, error) {
+func (c *Command) loadProject() (*resources.Project, error) {
 	infile, err := c.ProjectInFile()
 	if err != nil {
 		return nil, err
@@ -190,14 +147,17 @@ func (c *Command) loadProject() (*common.Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := assets.UnmarshalProject(pdata)
-	if err != nil {
+	p := &resources.Project{}
+	if err = protojson.Unmarshal(pdata, p); err != nil {
 		return nil, err
 	}
 	return p, nil
 }
 
-func (c *Command) saveProject(p *common.Project) error {
+func (c *Command) saveProject(p *resources.Project) error {
+	if p.Name == "" {
+		return fmt.Errorf("project %v has no name", *p)
+	}
 	fallback := sanitize.Name(fmt.Sprintf("%s.json", p.Name))
 	outfile, err := c.ProjectOutFile(fallback)
 	if err != nil {

@@ -161,9 +161,9 @@ func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	return getSkusForQuery(db, querySku.String())
 }
 
-func GetSkusForImage(db *sql.DB, image assets.GCloudImage) ([]string, error) {
+func GetSkusForImage(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	var querySku strings.Builder
-	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{image.Region})
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
 	return getSkusForQuery(db, querySku.String())
 }
@@ -199,27 +199,28 @@ func GetSkusForExternalEgress(db *sql.DB, region string, networkTier string) ([]
 	var querySku strings.Builder
 	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
 	WHERE Sku.ResourceFamily='Network'`)
-	if region != "" {
-		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
-	}
 	// There are other types of egress ...
 	if networkTier == "PREMIUM" {
 		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
+		for idx, area := range getGlobalRegions() {
+			if idx == 0 {
+				querySku.WriteString(" AND (Sku.Description like '% to ")
+				querySku.WriteString(area)
+				querySku.WriteString("'")
+			} else {
+				querySku.WriteString(" OR Sku.Description like '% to ")
+				querySku.WriteString(area)
+				querySku.WriteString("'")
+			}
+		}
+		querySku.WriteString(")")
 	} else {
 		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetEgress' ")
-	}
-	for idx, area := range getGlobalRegions() {
-		if idx == 0 {
-			querySku.WriteString(" AND (Sku.Description like '% to ")
-			querySku.WriteString(area)
-			querySku.WriteString("'")
-		} else {
-			querySku.WriteString(" OR Sku.Description like '% to ")
-			querySku.WriteString(area)
-			querySku.WriteString("'")
+		if region != "" {
+			fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
 		}
 	}
-	fmt.Fprintf(&querySku, ");")
+	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())
 }
 

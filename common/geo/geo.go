@@ -23,8 +23,8 @@ func (c Continent) String() string {
 		"Asia",
 		"Australia",
 		"Europe",
-		"Latin America",
-		"North America",
+		"LatinAmerica",
+		"NorthAmerica",
 		"America",
 	}[c]
 }
@@ -39,9 +39,9 @@ func ContinentFromString(name string) Continent {
 		return Australia
 	case "Europe":
 		return Europe
-	case "Latin America":
+	case "LatinAmerica":
 		return LatinAmerica
-	case "North America":
+	case "NorthAmerica":
 		return NorthAmerica
 	default:
 		return UnknownC

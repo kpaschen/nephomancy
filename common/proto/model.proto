@@ -17,8 +17,10 @@ message Location {
   string global_region = 1; // APAC, EMEA, LATAM, NAM
   string continent = 2; // Asia, Africa, Australia, Europe, NorthAmerica, SouthAmerica
   string country_code = 3;  // ISO 2-letter country code
+  // TODO: esp. for country_code US, may want better subdivision
 }
 
+// MachineType contains specs for a physical or virtual machine (aka an Instance).
 message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
@@ -26,19 +28,25 @@ message MachineType {
   // Probably want something like preemptibility and sole tenancy here as well.
 }
 
+// A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
+// Almost all providers will let you select "SSD" or "Not SSD", aka "Standard".
 message DiskType {
   uint32 size_gb = 1;
   string disk_tech = 2;  // SSD or Standard
   // need an enum or a flag for whether this is replicated.
 }
 
+// Operating system image.
 message Image {
-  uint32 size_gb = 1;
-  Location location = 2;
-  map<string, google.protobuf.Any> provider_details = 3;
+  string name = 1;
+  uint32 size_gb = 2;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
-message VM {
+// An instance is a virtual machine (VM) or a physical machine (sometimes called a Node).
+// TODO: maybe add external ip addresses here? At least temporary/ephemeral ones live
+// only with the VM. But static/permanent ones probably belong on the Network resource.
+message Instance {
   Location location = 1;
   MachineType type = 2;
   // You can have one detail per provider. The common VM is a spec; the provider
@@ -57,33 +65,51 @@ message VM {
   map<string, google.protobuf.Any> provider_details = 3;
 }
 
-// VMs with the same region and type
-message VMSet {
-  VM template = 2;
+// An Instance set collects similar instances. All the instances in the set are
+// represented by the template entry. This is so you can have multiple instances
+// of the same machine type in the same location without getting many identical
+// lines in the cost report.
+message InstanceSet {
+  string name = 1;  // The name is just for display purposes.
+  Instance template = 2;
   uint32 count = 3;
   // for cost estimate: how many hours/month do you expect this vm to be running.
   // When this is not set, cost estimate will be based on running continuously.
+  // AWS use 730 hours/month for "always on"
   uint32 usage_hours_per_month = 4;
 }
 
+// This is block storage.
 message Disk {
   Location location = 1;
   DiskType type = 2; 
-  // the size in the disk type is the maximum size for the disk.
+  // the size in the disk type is the maximum size for the disk. The actual
+  // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
   uint64 actual_size_gb = 3;
+  // For now, a disk can have 0 or 1 image on it.
+  Image image = 4;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 4;
+  map<string, google.protobuf.Any> provider_details = 5;
 }
 
-// Disks with the same location, type, and size
+// Disks with the same location, type, and actual size
 message DiskSet {
+  string name = 1; // Just for display
   Disk template = 2;
   uint32 count = 3;
   // for cost estimate: how much of the available space do you expect to be using (avg per month)
-  // When this is not set, cost estimate will be based on full usage.
+  // When this is not set, the cost estimate will be based on full usage.
   uint32 percent_used_avg = 4;
 }
 
+// Some providers create default subnetworks for you automatically (gcloud),
+// others only explicitly have "subnets" in VPCs (AWS).
+// For this model, a subnetwork exists for every region that has at least one
+// Instance in it. Yes you could have multiple networks and subnetworks in each
+// region, and your Instances could be on one or more of them; but for the purposes
+// of cost estimation, what matters is which regions have ingress-consuming or
+// egress-producing stuff in them. So a Subnetwork is basically a location with
+// a bandwidth usage spec.
 message Subnetwork {
   string name = 1;
   Location location = 2;
@@ -97,6 +123,8 @@ message Subnetwork {
   map<string, google.protobuf.Any> provider_details = 6;
 }
 
+// Load balancers should probably be listed here. Firewalls too.
+// IP Addresses are usually attached to an Instance, so should be handled there.
 message Network {
   string name = 1;
   repeated Subnetwork subnetworks = 2;
@@ -108,8 +136,7 @@ message Network {
 
 message Project {
   string name = 1;
-  repeated VMSet vm_sets = 2;
+  repeated InstanceSet instance_sets = 2;
   repeated DiskSet disk_sets = 3;
-  repeated Image images = 4;
   repeated Network networks = 5;
 }

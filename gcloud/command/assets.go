@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// TODO: rename to ResourcesCommand (after extracting common parts)
 type AssetsCommand struct {
 	Command
 }
@@ -73,7 +74,7 @@ func (c *AssetsCommand) Run(args []string) int {
 		*/
 		project = p
 	}
-	if err = cache.ReconcileSpecAndAssets(db, project); err != nil {
+	if err = cache.FillInSpec(db, project); err != nil {
 		log.Fatalf("resolving project failed: %v", err)
 	}
 

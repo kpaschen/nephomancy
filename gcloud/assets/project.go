@@ -20,13 +20,25 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 	return p, nil
 }
 
+type ProjectInProgress struct {
+	project        *common.Project
+	// Map long name of disk to image
+	danglingImages map[string]*common.Image
+	// Map long name of disk to disk
+	danglingDisks  map[string]*common.Disk
+}
+
 // BuildProject takes a list of small assets and create a project proto
-// containing lists of vm sets, disk sets, and images.
+// containing lists of instance sets, disk sets, and images.
 func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	p := &common.Project{
-		VmSets:   make([]*common.VMSet, 0),
-		DiskSets: make([]*common.DiskSet, 0),
-		Images:   make([]*common.Image, 0),
+		InstanceSets: make([]*common.InstanceSet, 0),
+		DiskSets:     make([]*common.DiskSet, 0),
+	}
+	pip := &ProjectInProgress{
+		project:        p,
+		danglingImages: make(map[string](*common.Image)),
+		danglingDisks:  make(map[string](*common.Disk)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -48,21 +60,21 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			}
 		case "Disk":
 			{
-				d, err := createDisk(as, false)
+				d, name, err := createDisk(as, false)
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(p, d); err != nil {
+				if err = addDiskToProject(pip, name, d); err != nil {
 					return nil, err
 				}
 			}
 		case "RegionDisk":
 			{
-				d, err := createDisk(as, true)
+				d, name, err := createDisk(as, true)
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(p, d); err != nil {
+				if err = addDiskToProject(pip, name, d); err != nil {
 					return nil, err
 				}
 			}
@@ -72,7 +84,8 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				if err != nil {
 					return nil, err
 				}
-				if err = addImageToProject(p, img); err != nil {
+				sourceDisk, _ := as.resourceMap["sourceDisk"].(string)
+				if err = addImageToProject(pip, img, sourceDisk); err != nil {
 					return nil, err
 				}
 			}
@@ -130,16 +143,20 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			fmt.Printf("type %s not handled yet\n", bt)
 		}
 	}
+	// TODO: resolve other dangling items here
+	if err := resolveDanglingImages(pip); err != nil {
+		return nil, err
+	}
 	if err := pruneSubnetworks(p); err != nil {
 		return nil, err
 	}
 	return p, nil
 }
 
-func VmRegionZone(vm common.VM) (region string, zone string, err error) {
+func VmRegionZone(instance common.Instance) (region string, zone string, err error) {
 	var gvm GCloudVM
 	if err := ptypes.UnmarshalAny(
-		vm.ProviderDetails[GcloudProvider], &gvm); err != nil {
+		instance.ProviderDetails[GcloudProvider], &gvm); err != nil {
 		return "", "", err
 	}
 	return gvm.Region, gvm.Zone, nil
@@ -163,10 +180,10 @@ func SubnetworkRegionTier(subnetwork common.Subnetwork) (region string, tier str
 	return gsnw.Region, gsnw.Tier, nil
 }
 
-func vmNetworkTier(vm common.VM) (string, error) {
+func vmNetworkTier(instance common.Instance) (string, error) {
 	var gvm GCloudVM
 	if err := ptypes.UnmarshalAny(
-		vm.ProviderDetails[GcloudProvider], &gvm); err != nil {
+		instance.ProviderDetails[GcloudProvider], &gvm); err != nil {
 		return "", err
 	}
 	if gvm.NetworkTier == "" {
@@ -175,9 +192,20 @@ func vmNetworkTier(vm common.VM) (string, error) {
 	return gvm.NetworkTier, nil
 }
 
+func resolveDanglingImages(pip *ProjectInProgress) error {
+	for diskName, img := range pip.danglingImages {
+		if pip.danglingDisks[diskName] == nil {
+			return fmt.Errorf("missing disk %s for image %+v\n",
+			diskName, img)
+		}
+		pip.danglingDisks[diskName].Image = img
+	}
+	return nil
+}
+
 func pruneSubnetworks(p *common.Project) error {
 	regions := make(map[string]string)
-	for _, vms := range p.VmSets {
+	for _, vms := range p.InstanceSets {
 		region, _, _ := VmRegionZone(*vms.Template)
 		tier, _ := vmNetworkTier(*vms.Template)
 		regions[region] = tier
@@ -236,10 +264,10 @@ func createSubnetwork(a SmallAsset) (*common.Subnetwork, error) {
 		IngressGbitsPerMonth: 20,
 		// This is a quota metric: compute.googleapis.com/vm_to_internet_egress_bandwidth
 		// The default value is 75 Gb total per region _per month_.
-		// There is also a cap based on the VMs you are using,
+		// There is also a cap based on the Instances you are using,
 		// but it is way more than the 75 Gbps per region.
 		ExternalEgressGbitsPerMonth: 75,
-		// There is an internal limit per VM, depending on the
+		// There is an internal limit per Instance, depending on the
 		// machine type. It is between 2 and 32 Gbit/s.
 		InternalEgressGbitsPerMonth: 100,
 		ProviderDetails: map[string]*anypb.Any{
@@ -267,23 +295,23 @@ func addNetworkToProject(p *common.Project, n *common.Network) error {
 }
 
 // The fingerprints are internal only. This just creates a basic
-// grouping of VMs into sets that is probably useful. There is
-// no need in general for VMSets to be uniquely distinguishable.
-func fingerprintVM(vm common.VM) (string, error) {
-	region, _, err := VmRegionZone(vm)
+// grouping of Instances into sets that is probably useful. There is
+// no need in general for InstanceSets to be uniquely distinguishable.
+func fingerprintVM(instance common.Instance) (string, error) {
+	region, _, err := VmRegionZone(instance)
 	if err != nil {
 		return "", err
 	}
 	if region == "" {
-		return "", fmt.Errorf("missing region for vm %+v", vm)
+		return "", fmt.Errorf("missing region for instance %+v", instance)
 	}
 	var fp strings.Builder
 	fmt.Fprintf(&fp, "%s:", region)
-	if vm.Type != nil {
-		fmt.Fprintf(&fp, "%s:", vm.Type)
+	if instance.Type != nil {
+		fmt.Fprintf(&fp, "%s:", instance.Type)
 	} else {
 		var gvm GCloudVM
-		err := ptypes.UnmarshalAny(vm.ProviderDetails[GcloudProvider], &gvm)
+		err := ptypes.UnmarshalAny(instance.ProviderDetails[GcloudProvider], &gvm)
 		if err != nil {
 			return "", err
 		}
@@ -292,28 +320,28 @@ func fingerprintVM(vm common.VM) (string, error) {
 	return fp.String(), nil
 }
 
-func addVMToProject(p *common.Project, vm *common.VM) error {
-	fp, err := fingerprintVM(*vm)
+func addVMToProject(p *common.Project, instance *common.Instance) error {
+	fp, err := fingerprintVM(*instance)
 	if err != nil {
 		return err
 	}
-	for _, vmSet := range p.VmSets {
-		f, _ := fingerprintVM(*vmSet.Template)
+	for _, instanceSet := range p.InstanceSets {
+		f, _ := fingerprintVM(*instanceSet.Template)
 		if f == fp {
-			vmSet.Count++
+			instanceSet.Count++
 			return nil
 		}
 	}
-	// No vmset with the given fingerprint yet
-	vset := common.VMSet{
-		Template: vm,
+	// No instance set with the given fingerprint yet
+	vset := common.InstanceSet{
+		Template: instance,
 		Count:    1,
 	}
-	p.VmSets = append(p.VmSets, &vset)
+	p.InstanceSets = append(p.InstanceSets, &vset)
 	return nil
 }
 
-func createVM(a SmallAsset) (*common.VM, error) {
+func createVM(a SmallAsset) (*common.Instance, error) {
 	networkTier := ""
 	if a.resourceMap["networkInterfaces"] != nil {
 		nw, _ := a.resourceMap["networkInterfaces"].([]interface{})
@@ -343,7 +371,7 @@ func createVM(a SmallAsset) (*common.VM, error) {
 		return nil, err
 	}
 
-	ret := common.VM{
+	ret := common.Instance{
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},
@@ -352,12 +380,14 @@ func createVM(a SmallAsset) (*common.VM, error) {
 	return &ret, nil
 }
 
-func addDiskToProject(p *common.Project, dsk *common.Disk) error {
+func addDiskToProject(pip *ProjectInProgress, name string, dsk *common.Disk) error {
+	// TODO: fingerprinting has to come during consolidation after attaching
+	// images. take images into account for fp.
 	fp, err := fingerprintDisk(*dsk)
 	if err != nil {
 		return err
 	}
-	for _, dskSet := range p.DiskSets {
+	for _, dskSet := range pip.project.DiskSets {
 		f, _ := fingerprintDisk(*dskSet.Template)
 		if f == fp {
 			dskSet.Count++
@@ -369,7 +399,8 @@ func addDiskToProject(p *common.Project, dsk *common.Disk) error {
 		Template: dsk,
 		Count:    1,
 	}
-	p.DiskSets = append(p.DiskSets, &dset)
+	pip.project.DiskSets = append(pip.project.DiskSets, &dset)
+	pip.danglingDisks[name] = dsk
 	return nil
 }
 
@@ -394,15 +425,15 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 	return fp.String(), nil
 }
 
-func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
+func createDisk(a SmallAsset, isRegional bool) (*common.Disk, string, error) {
 	regions, err := a.regions()
 	if err != nil || len(regions) == 0 {
-		return nil, fmt.Errorf("missing both zone and region for disk %+v", a)
+		return nil, "", fmt.Errorf("missing both zone and region for disk %+v", a)
 	}
 	if len(regions) > 1 {
 		// This is probably not an error, i just need to decide how
 		// to handle it.
-		return nil, fmt.Errorf("multiple regions for a disk? %+v", a)
+		return nil, "",  fmt.Errorf("multiple regions for a disk? %+v", a)
 	}
 	sizeGB, _ := a.storageSize()
 	zone, _ := a.zone()
@@ -414,7 +445,7 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 		Zone:       zone,
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	ret := common.Disk{
 		ActualSizeGb: uint64(sizeGB),
@@ -422,28 +453,19 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, error) {
 			GcloudProvider: details,
 		},
 	}
-	return &ret, nil
+	longName, _ := a.resourceMap["selfLink"].(string)
+	return &ret, longName, nil
 }
 
 func createImage(a SmallAsset) (*common.Image, error) {
-	// Not handling licenses yet (or maybe ever).
+	// Not handling licenses yet.
 	size, _ := a.storageSize()
-	regions, _ := a.regions()
-	if len(regions) != 1 {
-		return nil, fmt.Errorf("unexpected number of regions in image: %v", regions)
-	}
-	details, _ := ptypes.MarshalAny(&GCloudImage{
-		Region: regions[0],
-	})
 	return &common.Image{
 		SizeGb: uint32(size),
-		ProviderDetails: map[string]*anypb.Any{
-			GcloudProvider: details,
-		},
 	}, nil
 }
 
-func addImageToProject(p *common.Project, img *common.Image) error {
-	p.Images = append(p.Images, img)
+func addImageToProject(p *ProjectInProgress, img *common.Image, sourceDisk string) error {
+	p.danglingImages[sourceDisk] = img
 	return nil
 }
