@@ -21,11 +21,11 @@ func UnmarshalProject(projectAsJsonBytes []byte) (*common.Project, error) {
 }
 
 type ProjectInProgress struct {
-	project        *common.Project
+	project *common.Project
 	// Map long name of disk to image
 	danglingImages map[string]*common.Image
 	// Map long name of disk to disk
-	danglingDisks  map[string]*common.Disk
+	danglingDisks map[string]*common.Disk
 }
 
 // BuildProject takes a list of small assets and create a project proto
@@ -191,7 +191,7 @@ func resolveImagesAndDisks(pip *ProjectInProgress) error {
 	for diskName, img := range pip.danglingImages {
 		if pip.danglingDisks[diskName] == nil {
 			return fmt.Errorf("missing disk %s for image %+v\n",
-			diskName, img)
+				diskName, img)
 		}
 		pip.danglingDisks[diskName].Image = img
 	}
@@ -394,7 +394,6 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	return &ret, nil
 }
 
-
 func fingerprintDisk(disk common.Disk) (string, error) {
 	region, _, _ := DiskRegionZone(disk)
 	if region == "" {
@@ -427,7 +426,7 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, string, error) {
 	if len(regions) > 1 {
 		// This is probably not an error, i just need to decide how
 		// to handle it.
-		return nil, "",  fmt.Errorf("multiple regions for a disk? %+v", a)
+		return nil, "", fmt.Errorf("multiple regions for a disk? %+v", a)
 	}
 	sizeGB, _ := a.storageSize()
 	zone, _ := a.zone()
@@ -456,7 +455,7 @@ func createImage(a SmallAsset) (*common.Image, error) {
 	size, _ := a.storageSize()
 	name, _ := a.resourceMap["name"].(string)
 	return &common.Image{
-		Name: name,
+		Name:   name,
 		SizeGb: uint32(size),
 	}, nil
 }
