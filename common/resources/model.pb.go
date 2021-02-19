@@ -769,10 +769,12 @@ type Project struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name         string         `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Instances and Disks are "Compute" resources
 	InstanceSets []*InstanceSet `protobuf:"bytes,2,rep,name=instance_sets,json=instanceSets,proto3" json:"instance_sets,omitempty"`
 	DiskSets     []*DiskSet     `protobuf:"bytes,3,rep,name=disk_sets,json=diskSets,proto3" json:"disk_sets,omitempty"`
-	Networks     []*Network     `protobuf:"bytes,5,rep,name=networks,proto3" json:"networks,omitempty"`
+	// Network resources include ip addresses, load balancers, bandwidth, firewall rules
+	Networks []*Network `protobuf:"bytes,5,rep,name=networks,proto3" json:"networks,omitempty"`
 }
 
 func (x *Project) Reset() {

@@ -136,7 +136,16 @@ message Network {
 
 message Project {
   string name = 1;
+
+  // Instances and Disks are "Compute" resources
   repeated InstanceSet instance_sets = 2;
   repeated DiskSet disk_sets = 3;
+
+  // Network resources include ip addresses, load balancers, bandwidth, firewall rules
   repeated Network networks = 5;
+
+  // Other resources not handled yet: Storage (Object storage -- S3 buckets);
+  // Services (e.g. Kubernetes, Stackdriver, hosted services.
+  // Maybe container services separate from that?
+  // Not sure where licenses would go yet.
 }
