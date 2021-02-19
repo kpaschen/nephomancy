@@ -1,0 +1,154 @@
+package cache
+
+import (
+	"database/sql"
+	"os"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+func CreateOrUpdateDatabase(filename *string) error {
+        handle, err := os.OpenFile(*filename, os.O_RDWR|os.O_CREATE, 0666)
+        if err != nil {
+                return err
+        }
+        handle.Close()
+        db, _ := sql.Open("sqlite3", *filename)
+        defer db.Close()
+        if err = createBillingTables(db); err != nil {
+                return err
+        }
+        return createResourceMetadataTables(db)
+}
+
+func createTable(db *sql.DB, ct string) error {
+	stmt, err := db.Prepare(ct)
+	if err != nil {
+		return err
+	}
+	_, err = stmt.Exec()
+	return err
+}
+
+func createResourceMetadataTables(db *sql.DB) error {
+	// DCS have multiple DCs but you can't really choose which of them
+	// your stuff will be in. They're also all in Switzerland. I assume
+	// that if you choose Storage with backup you'll get a backup in a different
+	// DC? but don't know for sure.
+
+	// DCS don't really have machine types. They do have SLA tiers that determine
+	// pricing for everything though. VMs can be configured by number of CUs
+	// (vCPUs basically) and GB of RAM, and are charged by the hour. I don't
+	// think they have an option to buy dedicated machines.
+
+	createCPUCostsTableSQL := `CREATE TABLE IF NOT EXISTS CpuCosts (
+		"SLA" TEXT NOT NULL PRIMARY KEY,
+		"UsageUnit" TEXT,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+	);`
+	if err := createTable(db, createCPUCostsTableSQL); err != nil {
+		return err
+	}
+
+	createMemoryCostsTableSQL := `CREATE TABLE IF NOT EXISTS MemoryCosts (
+		"SLA" TEXT NOT NULL PRIMARY KEY,
+		"UsageUnit" TEXT,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+	);`
+	if err := createTable(db, createMemoryCostsTableSQL); err != nil {
+		return err
+	}
+
+	// Disks come in 'fast' or 'ultra fast' and with or without backup.
+	createDiskCostsTableSQL := `CREATE TABLE IF NOT EXISTS DiskCosts (
+		"SLA" TEXT NOT NULL,
+		"DiskType" STRING NOT NULL,
+		"Backup" INTEGER NOT NULL,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+		PRIMARY KEY (SLA, DiskType),
+	);`
+	if err := createTable(db, createDiskCostsTableSQL); err != nil {
+		return err
+	}
+
+	createIPAddrCostsTableSQL := `CREATE TABLE IF NOT EXISTS IpAddrCosts (
+		"SLA" TEXT NOT NULL,
+		"Cidr" INTEGER NOT NULL,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+		PRIMARY KEY (SLA, Cidr),
+	);`
+	if err := createTable(db, createIPAddrCostsTableSQL); err != nil {
+		return err
+	}
+
+	// All DCS bandwidth costs are symmetric. Some traffic to internal
+	// targets is free, that is not modelled here.
+	// Documentation says you can get higher bandwidths on request.
+	createBandwidthCostsTableSQL := `CREATE TABLE IF NOT EXISTS BandwidthCosts (
+		"SLA" TEXT NOT NULL,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+		"MaxMbits" INTEGER,
+		PRIMARY KEY (SLA, MaxMbits),
+	);`
+	if err := createTable(db, createBandwidthCostsTableSQL); err != nil {
+		return err
+	}
+
+	// This is for a NAT gateway + Firewall with loadbalancing capabilities.
+	createGatewayCostsTableSQL := `CREATE TABLE IF NOT EXISTS GatewayCosts (
+		"SLA" TEXT NOT NULL,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+		"Type" TEXT NOT NULL,
+                PRIMARY KEY (SLA, Type),
+	);`
+	if err := createTable(db, createGatewayCostsTableSQL); err != nil {
+		return err
+	}
+
+	// With other providers I think this would be part of a license cost for
+	// an image you're using. DCS also have additional licenses you can buy,
+	// this here is mandatory though, you have to use Windows or RedHat.
+	// Payment is by VM.
+	createOSCostsTableSQL := `CREATE TABLE IF NOT EXISTS OSCosts (
+		"SLA" TEXT NOT NULL,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+		"Vendor" TEXT NOT NULL,
+                PRIMARY KEY (SLA, Vendor),
+	);`
+	if err := createTable(db, createOSCostsTableSQL); err != nil {
+		return err
+	}
+
+	// This is only available in the 'advanced' SLA.
+	// payment by GB, based on hourly peak API usage.
+	createObjectStorageCostsTableSQL := `CREATE TABLE IF NOT EXISTS ObjectStorageCosts (
+		"SLA" TEXT NOT NULL PRIMARY KEY,
+		"UsageUnit" STRING,
+		"Summary" TEXT,
+		"CurrencyCode" TEXT,
+		"Nanos" INTEGER,
+	);`
+	if err := createTable(db, createObjectStorageCostsTableSQL); err != nil {
+		return err
+	}
+
+}
