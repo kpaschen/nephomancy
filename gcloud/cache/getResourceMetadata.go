@@ -142,13 +142,6 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
-			/*
-				if dset.Template.Image != nil {
-					// Template.Image should have a name and a sizeGb.
-					// There are no gcloud-specific settings for
-					// images so far.
-				}
-			*/
 			details, err := ptypes.MarshalAny(&assets.GCloudDisk{
 				DiskType: dt,
 				Region:   r[0], // only using first region

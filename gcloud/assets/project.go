@@ -64,9 +64,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(pip, name, d); err != nil {
-					return nil, err
-				}
+				pip.danglingDisks[name] = d
 			}
 		case "RegionDisk":
 			{
@@ -74,9 +72,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				if err != nil {
 					return nil, err
 				}
-				if err = addDiskToProject(pip, name, d); err != nil {
-					return nil, err
-				}
+				pip.danglingDisks[name] = d
 			}
 		case "Image":
 			{
@@ -143,8 +139,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			fmt.Printf("type %s not handled yet\n", bt)
 		}
 	}
-	// TODO: resolve other dangling items here
-	if err := resolveDanglingImages(pip); err != nil {
+	if err := resolveImagesAndDisks(pip); err != nil {
 		return nil, err
 	}
 	if err := pruneSubnetworks(p); err != nil {
@@ -192,13 +187,32 @@ func vmNetworkTier(instance common.Instance) (string, error) {
 	return gvm.NetworkTier, nil
 }
 
-func resolveDanglingImages(pip *ProjectInProgress) error {
+func resolveImagesAndDisks(pip *ProjectInProgress) error {
 	for diskName, img := range pip.danglingImages {
 		if pip.danglingDisks[diskName] == nil {
 			return fmt.Errorf("missing disk %s for image %+v\n",
 			diskName, img)
 		}
 		pip.danglingDisks[diskName].Image = img
+	}
+	for _, dsk := range pip.danglingDisks {
+		fp, err := fingerprintDisk(*dsk)
+		if err != nil {
+			return err
+		}
+		for _, dskSet := range pip.project.DiskSets {
+			f, _ := fingerprintDisk(*dskSet.Template)
+			if f == fp {
+				dskSet.Count++
+				return nil
+			}
+		}
+		// No disk set with the given fingerprint yet
+		dset := common.DiskSet{
+			Template: dsk,
+			Count:    1,
+		}
+		pip.project.DiskSets = append(pip.project.DiskSets, &dset)
 	}
 	return nil
 }
@@ -380,29 +394,6 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	return &ret, nil
 }
 
-func addDiskToProject(pip *ProjectInProgress, name string, dsk *common.Disk) error {
-	// TODO: fingerprinting has to come during consolidation after attaching
-	// images. take images into account for fp.
-	fp, err := fingerprintDisk(*dsk)
-	if err != nil {
-		return err
-	}
-	for _, dskSet := range pip.project.DiskSets {
-		f, _ := fingerprintDisk(*dskSet.Template)
-		if f == fp {
-			dskSet.Count++
-			return nil
-		}
-	}
-	// No disk set with the given fingerprint yet
-	dset := common.DiskSet{
-		Template: dsk,
-		Count:    1,
-	}
-	pip.project.DiskSets = append(pip.project.DiskSets, &dset)
-	pip.danglingDisks[name] = dsk
-	return nil
-}
 
 func fingerprintDisk(disk common.Disk) (string, error) {
 	region, _, _ := DiskRegionZone(disk)
@@ -421,6 +412,9 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 			return "", err
 		}
 		fmt.Fprintf(&fp, "%s", gdsk.DiskType)
+	}
+	if disk.Image != nil {
+		fmt.Fprintf(&fp, "img(%s:%d)", disk.Image.Name, disk.Image.SizeGb)
 	}
 	return fp.String(), nil
 }
@@ -460,7 +454,9 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, string, error) {
 func createImage(a SmallAsset) (*common.Image, error) {
 	// Not handling licenses yet.
 	size, _ := a.storageSize()
+	name, _ := a.resourceMap["name"].(string)
 	return &common.Image{
+		Name: name,
 		SizeGb: uint32(size),
 	}, nil
 }
