@@ -110,12 +110,15 @@ message DiskSet {
 // of cost estimation, what matters is which regions have ingress-consuming or
 // egress-producing stuff in them. So a Subnetwork is basically a location with
 // a bandwidth usage spec.
+// TODO: maybe merge this into network or instances?
 message Subnetwork {
   string name = 1;
   Location location = 2;
   // for cost estimate: total gbits per month per subnetwork
   // Note that there are provider-specific caps and quota settings
   // that may apply and cause your effective bandwidth to be lower.
+  // TODO: decide whether to model total gbits per month or max mbits per
+  // second, or both.
   uint64 ingress_gbits_per_month = 3;
   uint64 external_egress_gbits_per_month = 4;
   uint64 internal_egress_gbits_per_month = 5;
@@ -123,15 +126,28 @@ message Subnetwork {
   map<string, google.protobuf.Any> provider_details = 6;
 }
 
+// This is any or all of: external load balancer, firewall, nat gateway
+message Gateway {
+  map<string, google.protobuf.Any> provider_details = 1;
+}
+
 // Load balancers should probably be listed here. Firewalls too.
 // IP Addresses are usually attached to an Instance, so should be handled there.
 message Network {
   string name = 1;
   repeated Subnetwork subnetworks = 2;
+  int32 ip_addresses = 3;
+  repeated Gateway gateways = 4;
+  // internet bandwidth in Mbit/s. If you need this broken down by region,
+  // specify it on the relevant subnetworks instead.
+  // Also note this is your max bandwidth capacity. The gbits_per_month on
+  // the subnetworks are how much you actually transfer.
+  int32 bandwidth_mbits = 5;
+
   // there are types of network (e.g. vpn), but the names and the implications
   // for billing vary by cloud provider.
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 3;
+  map<string, google.protobuf.Any> provider_details = 6;
 }
 
 message Project {
@@ -144,8 +160,10 @@ message Project {
   // Network resources include ip addresses, load balancers, bandwidth, firewall rules
   repeated Network networks = 5;
 
+  map<string, google.protobuf.Any> provider_details = 6;
+
   // Other resources not handled yet: Storage (Object storage -- S3 buckets);
   // Services (e.g. Kubernetes, Stackdriver, hosted services.
   // Maybe container services separate from that?
-  // Not sure where licenses would go yet.
+  // Also licenses, but some are tied to VMs and others to other services.
 }

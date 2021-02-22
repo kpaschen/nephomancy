@@ -72,7 +72,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	locations := make(map[string]string)
 	for _, vmset := range p.InstanceSets {
 		if vmset.Template.Location == nil {
-			return fmt.Errorf("missing vmset location information\n")
+			return fmt.Errorf("missing vmset location information")
 		}
 		if vmset.Template.Type == nil {
 			return fmt.Errorf("missing vmset template information\n")

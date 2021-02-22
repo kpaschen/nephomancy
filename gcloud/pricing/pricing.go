@@ -65,9 +65,14 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		}
 	}
 	// Go over the vms again for networking. There will be one external IP
-	// per Instance (well, per NIC, but ok). It can be static or external.
+	// per Instance (well, per NIC, but ok). These can be ephemeral or
+	// permanent; the code treats them as permanent for now.
+	// This is gcloud-specific. Normally the ip address count is on the
+	// Network proto.
+	// TODO: permanent external IP addresses that are not attached to a VM
+	// will not be counted.
 	for _, vmset := range p.InstanceSets {
-		// This assumes the addresses are all external.
+		// This assumes the addresses are all permanent.
 		addrSkus, _ := cache.GetSkusForIpAddress(db, "", false)
 		pi, _ := cache.GetPricingInfo(db, addrSkus)
 		c, err := ipAddrCostRange(db, *vmset, pi)

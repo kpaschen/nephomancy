@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const workingDirDoc = `Path to working directory. Defaults to current working directory. A data directory called .nephomancy/gcloud/data will be created underneath this working directory if it does not exist yet.`
+const workingDirDoc = `Path to working directory. Defaults to current working directory. A data directory called .nephomancy/data will be created underneath this working directory if it does not exist yet.`
 
 const projectInDoc = `Filename to read project information from. If this flag is not set, a generic template project will be created. If this flag is set, the project is expected to be represented as a json-encoded protocol buffer.`
 
@@ -50,7 +50,7 @@ type Command struct {
 }
 
 // Create a flag set with flags common to most commands.
-func (c *Command) defaultFlagSet(cn string) *flag.FlagSet {
+func (c *Command) DefaultFlagSet(cn string) *flag.FlagSet {
 	f := flag.NewFlagSet(cn, flag.ExitOnError)
 	f.StringVar(&c.workingDirFlag, "workingdir", "", "Working Directory. Defaults to current working directory.")
 	f.StringVar(&c.projectOutFile, "projectout", "", "Where to save the project (json protobuf).")

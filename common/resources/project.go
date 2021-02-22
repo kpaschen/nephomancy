@@ -1,5 +1,10 @@
 package resources
 
+import (
+	"log"
+	"nephomancy/common/geo"
+)
+
 func GetProviderNames(p Project) []string {
 	providers := make(map[string]bool)
 	for _, is := range p.InstanceSets {
@@ -22,12 +27,46 @@ func GetProviderNames(p Project) []string {
 	return ret
 }
 
-func MakeSampleProject() Project {
+func ResolveLocation(where string) *Location {
+	region := geo.RegionFromString(where)
+	if region != geo.UnknownG {
+		return &Location{
+			GlobalRegion: where,
+		}
+	}
+	continent := geo.ContinentFromString(where)
+	if continent != geo.UnknownC {
+		return &Location{
+			Continent: where,
+		}
+	}
+	continent, region = geo.GetContinent(where)
+	if continent != geo.UnknownC && region != geo.UnknownG {
+		return &Location{
+			GlobalRegion: region.String(),
+			Continent: continent.String(),
+			CountryCode: where,
+		}
+	}
+	return nil
+}
+
+func MakeSampleProject(where string) Project {
+	var loc *Location
+	if where == "" {
+		loc = sampleLocation()
+	} else {
+		loc = ResolveLocation(where)
+		if loc == nil {
+			log.Printf("Failed to resolve %s into a location, will be using default location.\n", where)
+			loc = sampleLocation()
+		}
+	}
 	ret := Project{
 		Name:         "Nephomancy sample project",
-		InstanceSets: []*InstanceSet{makeSampleInstanceSet()},
-		DiskSets:     []*DiskSet{makeSampleDiskSet()},
-		Networks:     []*Network{makeSampleNetwork()},
+		InstanceSets: []*InstanceSet{makeSampleInstanceSet(loc)},
+		DiskSets:     []*DiskSet{makeSampleDiskSet(loc)},
+		Networks:     []*Network{makeSampleNetwork(loc)},
 	}
 	return ret
 }
@@ -41,7 +80,7 @@ func sampleLocation() *Location {
 	}
 }
 
-func makeSampleInstanceSet() *InstanceSet {
+func makeSampleInstanceSet(loc *Location) *InstanceSet {
 	mt := MachineType{
 		CpuCount: 2,
 		MemoryGb: 16,
@@ -49,7 +88,7 @@ func makeSampleInstanceSet() *InstanceSet {
 	ret := &InstanceSet{
 		Name: "Sample InstanceSet",
 		Template: &Instance{
-			Location: sampleLocation(),
+			Location: loc,
 			Type:     &mt,
 		},
 		Count:              1,
@@ -58,16 +97,15 @@ func makeSampleInstanceSet() *InstanceSet {
 	return ret
 }
 
-func makeSampleDiskSet() *DiskSet {
+func makeSampleDiskSet(loc *Location) *DiskSet {
 	ret := &DiskSet{
 		Name: "Sample Disk Set",
 		Template: &Disk{
-			Location: sampleLocation(),
+			Location: loc,
 			Type: &DiskType{
 				SizeGb:   100,
 				DiskTech: "SSD",
 			},
-			Image:        makeSampleImage(),
 			ActualSizeGb: 100,
 		},
 		Count:          1,
@@ -76,25 +114,21 @@ func makeSampleDiskSet() *DiskSet {
 	return ret
 }
 
-func makeSampleImage() *Image {
-	ret := &Image{
-		Name:   "Sample Image",
-		SizeGb: 10,
-	}
-	return ret
-}
-
-func makeSampleNetwork() *Network {
+func makeSampleNetwork(loc *Location) *Network {
 	snw := &Subnetwork{
 		Name:                        "default subnetwork",
-		Location:                    sampleLocation(),
+		Location:                    loc,
 		IngressGbitsPerMonth:        1,
 		ExternalEgressGbitsPerMonth: 1,
 		InternalEgressGbitsPerMonth: 3,
 	}
+
 	ret := &Network{
 		Name:        "default network",
 		Subnetworks: []*Subnetwork{snw},
+		IpAddresses: 4,
+		BandwidthMbits: 150,
+		Gateways: []*Gateway{&Gateway{}},
 	}
 	return ret
 }

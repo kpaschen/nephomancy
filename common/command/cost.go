@@ -9,6 +9,7 @@ import (
 	"strings"
 	// The modules implementing providers have to be loaded
 	_ "nephomancy/aws/provider"
+	_ "nephomancy/dcs/provider"
 	_ "nephomancy/gcloud/provider"
 )
 
@@ -51,7 +52,7 @@ func (*CostCommand) Synopsis() string {
 }
 
 func (r *CostCommand) Run(args []string) int {
-	fs := r.Command.defaultFlagSet("cost")
+	fs := r.Command.DefaultFlagSet("cost")
 	fs.Parse(args)
 
 	infile, err := r.ProjectInFile()

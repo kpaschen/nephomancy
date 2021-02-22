@@ -28,7 +28,7 @@ type ProjectInProgress struct {
 	danglingDisks map[string]*common.Disk
 }
 
-// BuildProject takes a list of small assets and create a project proto
+// BuildProject takes a list of small assets and creates a project proto
 // containing lists of instance sets, disk sets, and images.
 func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	p := &common.Project{

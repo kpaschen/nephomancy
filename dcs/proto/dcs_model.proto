@@ -1,0 +1,29 @@
+// DCS-specific extensions for the asset model.
+
+syntax = "proto3";
+
+package model;
+option go_package = ".;resources";
+
+// DCS has an OS License tied to each VM.
+message DcsVM {
+  string os_license = 1;  // Microsoft Windows or Red Hat
+}
+
+message DcsDisk {
+  // DCS disks come in "fast" or "ultra fast". Just based on the numbers
+  // published on their web site, I guess that "fast" is HDD and "ultra fast"
+  // is SDD-based, at least as of Feb 2021.
+  string disk_type = 1; 
+  bool with_backup = 2;
+}
+
+message DcsProject {
+  string sla = 1;  // Basic, Standard, Advanced. This is a DDC (dynamic data centre) wide setting.
+}
+
+// You must have one of these. Eco is free. I'm not sure if you can choose 'Backup'
+// when you have just one gateway, but I've never tried.
+message DcsGateway {
+  string type = 1; // Eco, Fast, Ultra Fast, or Backup
+}

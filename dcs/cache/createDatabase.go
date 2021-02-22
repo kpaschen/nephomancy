@@ -2,23 +2,10 @@ package cache
 
 import (
 	"database/sql"
-	"os"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
-func CreateOrUpdateDatabase(filename *string) error {
-        handle, err := os.OpenFile(*filename, os.O_RDWR|os.O_CREATE, 0666)
-        if err != nil {
-                return err
-        }
-        handle.Close()
-        db, _ := sql.Open("sqlite3", *filename)
-        defer db.Close()
-        if err = createBillingTables(db); err != nil {
-                return err
-        }
-        return createResourceMetadataTables(db)
+func CreateOrUpdateDatabase(db *sql.DB) error {
+        return createTables(db)
 }
 
 func createTable(db *sql.DB, ct string) error {
@@ -30,11 +17,11 @@ func createTable(db *sql.DB, ct string) error {
 	return err
 }
 
-func createResourceMetadataTables(db *sql.DB) error {
-	// DCS have multiple DCs but you can't really choose which of them
-	// your stuff will be in. They're also all in Switzerland. I assume
-	// that if you choose Storage with backup you'll get a backup in a different
-	// DC? but don't know for sure.
+func createTables(db *sql.DB) error {
+	// DCS have multiple Locations. You can choose a location manually when
+	// creating a DDC (dynamic data center), but since all their locations
+	// are in Switzerland and all have the same prices, this is not modelled
+	// in nephomancy.
 
 	// DCS don't really have machine types. They do have SLA tiers that determine
 	// pricing for everything though. VMs can be configured by number of CUs
@@ -46,7 +33,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"UsageUnit" TEXT,
 		"Summary" TEXT,
 		"CurrencyCode" TEXT,
-		"Nanos" INTEGER,
+		"Nanos" INTEGER
 	);`
 	if err := createTable(db, createCPUCostsTableSQL); err != nil {
 		return err
@@ -57,7 +44,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"UsageUnit" TEXT,
 		"Summary" TEXT,
 		"CurrencyCode" TEXT,
-		"Nanos" INTEGER,
+		"Nanos" INTEGER
 	);`
 	if err := createTable(db, createMemoryCostsTableSQL); err != nil {
 		return err
@@ -72,7 +59,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"Summary" TEXT,
 		"CurrencyCode" TEXT,
 		"Nanos" INTEGER,
-		PRIMARY KEY (SLA, DiskType),
+		PRIMARY KEY (SLA, DiskType)
 	);`
 	if err := createTable(db, createDiskCostsTableSQL); err != nil {
 		return err
@@ -85,7 +72,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"Summary" TEXT,
 		"CurrencyCode" TEXT,
 		"Nanos" INTEGER,
-		PRIMARY KEY (SLA, Cidr),
+		PRIMARY KEY (SLA, Cidr)
 	);`
 	if err := createTable(db, createIPAddrCostsTableSQL); err != nil {
 		return err
@@ -101,7 +88,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"CurrencyCode" TEXT,
 		"Nanos" INTEGER,
 		"MaxMbits" INTEGER,
-		PRIMARY KEY (SLA, MaxMbits),
+		PRIMARY KEY (SLA, MaxMbits)
 	);`
 	if err := createTable(db, createBandwidthCostsTableSQL); err != nil {
 		return err
@@ -115,7 +102,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"CurrencyCode" TEXT,
 		"Nanos" INTEGER,
 		"Type" TEXT NOT NULL,
-                PRIMARY KEY (SLA, Type),
+                PRIMARY KEY (SLA, Type)
 	);`
 	if err := createTable(db, createGatewayCostsTableSQL); err != nil {
 		return err
@@ -132,7 +119,7 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"CurrencyCode" TEXT,
 		"Nanos" INTEGER,
 		"Vendor" TEXT NOT NULL,
-                PRIMARY KEY (SLA, Vendor),
+                PRIMARY KEY (SLA, Vendor)
 	);`
 	if err := createTable(db, createOSCostsTableSQL); err != nil {
 		return err
@@ -145,10 +132,10 @@ func createResourceMetadataTables(db *sql.DB) error {
 		"UsageUnit" STRING,
 		"Summary" TEXT,
 		"CurrencyCode" TEXT,
-		"Nanos" INTEGER,
+		"Nanos" INTEGER
 	);`
 	if err := createTable(db, createObjectStorageCostsTableSQL); err != nil {
 		return err
 	}
-
+	return nil
 }
