@@ -5,7 +5,7 @@ import (
 )
 
 func CreateOrUpdateDatabase(db *sql.DB) error {
-        return createTables(db)
+	return createTables(db)
 }
 
 func createTable(db *sql.DB, ct string) error {

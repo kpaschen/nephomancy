@@ -44,8 +44,8 @@ func ResolveLocation(where string) *Location {
 	if continent != geo.UnknownC && region != geo.UnknownG {
 		return &Location{
 			GlobalRegion: region.String(),
-			Continent: continent.String(),
-			CountryCode: where,
+			Continent:    continent.String(),
+			CountryCode:  where,
 		}
 	}
 	return nil
@@ -124,11 +124,11 @@ func makeSampleNetwork(loc *Location) *Network {
 	}
 
 	ret := &Network{
-		Name:        "default network",
-		Subnetworks: []*Subnetwork{snw},
-		IpAddresses: 4,
+		Name:           "default network",
+		Subnetworks:    []*Subnetwork{snw},
+		IpAddresses:    4,
 		BandwidthMbits: 150,
-		Gateways: []*Gateway{&Gateway{}},
+		Gateways:       []*Gateway{&Gateway{}},
 	}
 	return ret
 }

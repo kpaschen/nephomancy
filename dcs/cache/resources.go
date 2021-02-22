@@ -7,10 +7,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"log"
-//	"nephomancy/common/geo"
+	//	"nephomancy/common/geo"
 	common "nephomancy/common/resources"
 	"nephomancy/dcs/resources"
-//	"strings"
+	//	"strings"
 )
 
 // Returns nil if spec location is compatible with Switzerland,
@@ -18,15 +18,15 @@ import (
 func checkLocation(spec common.Location) error {
 	if spec.GlobalRegion != "" && spec.GlobalRegion != "EMEA" {
 		return fmt.Errorf("spec global region %s does not allow a provider in EMEA",
-		spec.GlobalRegion)
+			spec.GlobalRegion)
 	}
 	if spec.Continent != "" && spec.Continent != "Europe" {
 		return fmt.Errorf("spec continent %s does not allow a provider in Switzerland",
-		spec.Continent)
+			spec.Continent)
 	}
 	if spec.CountryCode != "" && spec.CountryCode != "CH" {
 		return fmt.Errorf("spec country code is %s but %s is only available in Switzerland",
-		spec.CountryCode, resources.DcsProvider)
+			spec.CountryCode, resources.DcsProvider)
 	}
 	return nil
 }
@@ -44,7 +44,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	} else {
 		var dcsProject resources.DcsProject
 		err := ptypes.UnmarshalAny(p.ProviderDetails[resources.DcsProvider],
-		&dcsProject)
+			&dcsProject)
 		if err != nil {
 			return err
 		}
@@ -66,15 +66,14 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		// Special case: already have provider details. Consistency check.
 		if vmset.Template.ProviderDetails[resources.DcsProvider] != nil {
 			var dcsvm resources.DcsVM
-			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[
-			resources.DcsProvider], &dcsvm)
+			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[resources.DcsProvider], &dcsvm)
 			if err != nil {
 				return err
 			}
 			log.Printf("Instance Set %s already has details for provider %s, leaving them as they are.\n", vmset.Name, resources.DcsProvider)
-		} else {  // Normal case: no provider details yet.
+		} else { // Normal case: no provider details yet.
 			details, _ := ptypes.MarshalAny(&resources.DcsVM{
-				OsLicense: "Red Hat",  // making this the default, not sure?
+				OsLicense: "Red Hat", // making this the default, not sure?
 			})
 			vmset.Template.ProviderDetails[resources.DcsProvider] = details
 		}
@@ -94,8 +93,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		}
 		if dset.Template.ProviderDetails[resources.DcsProvider] != nil {
 			var dcsdisk resources.DcsDisk
-			err := ptypes.UnmarshalAny(dset.Template.ProviderDetails[
-			resources.DcsProvider], &dcsdisk)
+			err := ptypes.UnmarshalAny(dset.Template.ProviderDetails[resources.DcsProvider], &dcsdisk)
 			if err != nil {
 				return err
 			}
@@ -107,7 +105,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 				speed = "UltraFast"
 			}
 			details, _ := ptypes.MarshalAny(&resources.DcsDisk{
-				DiskType: speed,
+				DiskType:   speed,
 				WithBackup: false,
 			})
 			dset.Template.ProviderDetails[resources.DcsProvider] = details
@@ -120,8 +118,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			}
 			if gw.ProviderDetails[resources.DcsProvider] != nil {
 				var dcsgw resources.DcsGateway
-				err := ptypes.UnmarshalAny(gw.ProviderDetails[
-				resources.DcsProvider], &dcsgw)
+				err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsgw)
 				if err != nil {
 					return err
 				}
@@ -136,4 +133,3 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	}
 	return nil
 }
-

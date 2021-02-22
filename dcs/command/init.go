@@ -5,8 +5,8 @@ import (
 	"log"
 	common "nephomancy/common/command"
 	"nephomancy/common/registry"
-	"nephomancy/dcs/provider"
 	"nephomancy/dcs/cache"
+	"nephomancy/dcs/provider"
 	"strings"
 )
 

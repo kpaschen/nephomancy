@@ -66,7 +66,7 @@ func (p *DcsProvider) Initialize(datadir string) error {
 	return nil
 }
 
-func finalizer(p * DcsProvider) {
+func finalizer(p *DcsProvider) {
 	if p.DbHandle != nil {
 		if err := p.DbHandle.Close(); err != nil {
 			log.Printf("Failure in finalizer: %v\n", err)
