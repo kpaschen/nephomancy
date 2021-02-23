@@ -32,6 +32,7 @@ func (r *ResourcesCommand) Help() string {
           --projectin=filename %s
           --projectout=filename %s
 	  --provider=name %s
+	  --location=place Region, Continent or 2-letter country code. This will be used as the default location when creating a template.
 `, workingDirDoc, projectInDoc, projectOutDoc, providerDoc)
 	return strings.TrimSpace(helpText)
 }
@@ -43,7 +44,7 @@ func (*ResourcesCommand) Synopsis() string {
 func (r *ResourcesCommand) Run(args []string) int {
 	fs := r.Command.DefaultFlagSet("resources")
 	var location string
-	fs.StringVar(&location, "location", "", "Location. Can be a global region (EMEA, APAC, NAM, LATAM), a continent (Africa, Asia, Europe, NorthAmerica, SouthAmerica) or a three-letter ISO country code.")
+	fs.StringVar(&location, "location", "", "Location. Can be a global region (EMEA, APAC, NAM, LATAM), a continent (Africa, Asia, Europe, NorthAmerica, SouthAmerica) or a two-letter ISO country code.")
 	fs.Parse(args)
 
 	infile, err := r.ProjectInFile()
