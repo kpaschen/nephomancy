@@ -4,6 +4,7 @@ import (
 	"github.com/mitchellh/cli"
 	"log"
 	"nephomancy/common/command"
+	dcscmds "nephomancy/dcs/command"
 	gcmds "nephomancy/gcloud/command"
 	"os"
 )
@@ -17,6 +18,9 @@ func main() {
 		},
 		"cost": func() (cli.Command, error) {
 			return &command.CostCommand{}, nil
+		},
+		"dcs init": func() (cli.Command, error) {
+			return &dcscmds.InitCommand{}, nil
 		},
 		"gcloud init": func() (cli.Command, error) {
 			return &gcmds.InitCommand{}, nil

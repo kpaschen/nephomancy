@@ -41,7 +41,9 @@ func (*ResourcesCommand) Synopsis() string {
 }
 
 func (r *ResourcesCommand) Run(args []string) int {
-	fs := r.Command.defaultFlagSet("resources")
+	fs := r.Command.DefaultFlagSet("resources")
+	var location string
+	fs.StringVar(&location, "location", "", "Location. Can be a global region (EMEA, APAC, NAM, LATAM), a continent (Africa, Asia, Europe, NorthAmerica, SouthAmerica) or a three-letter ISO country code.")
 	fs.Parse(args)
 
 	infile, err := r.ProjectInFile()
@@ -57,7 +59,7 @@ func (r *ResourcesCommand) Run(args []string) int {
 		}
 		project = *p
 	} else {
-		project = resources.MakeSampleProject()
+		project = resources.MakeSampleProject(location)
 	}
 
 	if r.provider != "" {

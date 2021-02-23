@@ -55,7 +55,8 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 				assets.GcloudProvider, dt, t)
 		}
 	}
-	fmt.Printf("TODO: compare image settings of spec and gcloud disk here\n")
+	// Assume for now that it doesn't matter whether there is an image attached
+	// to the disk because images are always global (?)
 	return nil
 }
 
@@ -63,9 +64,15 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 // If they are not empty, they will be left as they were, but the tool
 // will log a warning message.
 func FillInProviderDetails(db *sql.DB, p *common.Project) error {
+	// These are locations that have been resolved into zones or regions.
+	// This is so that if an instance set has the same location spec as
+	// a disk set, they both end up in the same region.
+	// It might be nice for this to be configurable in the spec, and it might
+	// also be nice for it to use zones where possible, I just haven't done it yet.
+	locations := make(map[string]string)
 	for _, vmset := range p.InstanceSets {
 		if vmset.Template.Location == nil {
-			return fmt.Errorf("missing vmset location information\n")
+			return fmt.Errorf("missing vmset location information")
 		}
 		if vmset.Template.Type == nil {
 			return fmt.Errorf("missing vmset template information\n")
@@ -76,7 +83,6 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		// Special case: there already are provider details.
 		// Make sure they are consistent, otherwise print a warning.
 		if vmset.Template.ProviderDetails[assets.GcloudProvider] != nil {
-			fmt.Printf("I have a template\n")
 			var gvm assets.GCloudVM
 			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[assets.GcloudProvider], &gvm)
 			if err != nil {
@@ -85,11 +91,15 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err = checkVmSpec(db, gvm, *vmset.Template); err != nil {
 				return err
 			}
-			fmt.Printf("already have details\n")
+			// If checkVmSpec hasn't errored, gvm.Region exists.
+			locstring := common.PrintLocation(*vmset.Template.Location)
+			if locations[locstring] == "" {
+				locations[locstring] = gvm.Region
+			}
 			log.Printf("Instance Set %s already has details for provider %s, leaving them as they are.\n",
 				vmset.Name, assets.GcloudProvider)
 		} else { // There are no provider details
-			regions := resolveSpecLocation(*vmset.Template.Location)
+			regions := resolveSpecLocation(*vmset.Template.Location, "")
 			if len(regions) == 0 {
 				return fmt.Errorf(
 					"provider %s does not support regions matching location %v",
@@ -106,7 +116,47 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
+			locstring := common.PrintLocation(*vmset.Template.Location)
+			if locations[locstring] == "" {
+				locations[locstring] = r[0]
+			}
 			vmset.Template.ProviderDetails[assets.GcloudProvider] = details
+		}
+	}
+	for _, nw := range p.Networks {
+		for _, snw := range nw.Subnetworks {
+			if snw.Location == nil {
+				return fmt.Errorf("missing subnetwork location")
+			}
+			if snw.ProviderDetails == nil {
+				snw.ProviderDetails = make(map[string](*anypb.Any))
+			}
+			if snw.ProviderDetails[assets.GcloudProvider] != nil {
+				var gsw assets.GCloudSubnetwork
+				if err := ptypes.UnmarshalAny(
+					snw.ProviderDetails[assets.GcloudProvider],
+					&gsw); err != nil {
+					return err
+				}
+				log.Printf("subnetwork %s already has details\n",
+					snw.Name)
+			} else {
+				locstring := common.PrintLocation(*snw.Location)
+				regions := resolveSpecLocation(*snw.Location,
+					locations[locstring])
+				if len(regions) == 0 {
+					return fmt.Errorf(
+						"provider %s does not support regions matching location %v",
+						assets.GcloudProvider, snw.Location)
+				}
+				details, err := ptypes.MarshalAny(&assets.GCloudSubnetwork{
+					Region: regions[0], // only using first region
+				})
+				if err != nil {
+					return err
+				}
+				snw.ProviderDetails[assets.GcloudProvider] = details
+			}
 		}
 	}
 	for _, dset := range p.DiskSets {
@@ -134,7 +184,8 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 				dset.Name, assets.GcloudProvider)
 		} else { // There are no provider details yet.
 			// Get regions for spec location.
-			regions := resolveSpecLocation(*dset.Template.Location)
+			locstring := common.PrintLocation(*dset.Template.Location)
+			regions := resolveSpecLocation(*dset.Template.Location, locations[locstring])
 			if len(regions) == 0 {
 				return fmt.Errorf("provider %s does not support regions matching location %v", assets.GcloudProvider, dset.Template.Location)
 			}
@@ -142,13 +193,6 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
-			/*
-				if dset.Template.Image != nil {
-					// Template.Image should have a name and a sizeGb.
-					// There are no gcloud-specific settings for
-					// images so far.
-				}
-			*/
 			details, err := ptypes.MarshalAny(&assets.GCloudDisk{
 				DiskType: dt,
 				Region:   r[0], // only using first region
@@ -236,29 +280,61 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 			dset.PercentUsedAvg = 100 // full usage
 		}
 	}
+	for _, nw := range p.Networks {
+		for _, snw := range nw.Subnetworks {
+			if snw.ProviderDetails == nil {
+				return fmt.Errorf("Missing provider details for subnetwork %s\n",
+					snw.Name)
+			}
+			var sw assets.GCloudSubnetwork
+			err := ptypes.UnmarshalAny(snw.ProviderDetails[assets.GcloudProvider], &sw)
+			if err != nil {
+				return err
+			}
+			if snw.Location == nil {
+				loc, err := resolveLocation(sw.Region)
+				if err != nil {
+					return err
+				}
+				snw.Location = &loc
+			}
+		}
+	}
 	return nil
 }
 
 // Returns all regions consistent with loc.
 // Assume loc is internally consistent.
-func resolveSpecLocation(loc common.Location) []string {
+// If preferred is not empty, and is contained in the possible regions
+// for the location, return only preferred.
+func resolveSpecLocation(loc common.Location, preferred string) []string {
+	var regions []string
 	if loc.CountryCode != "" {
-		return RegionsByCountry(loc.CountryCode)
-	}
-	if loc.Continent != "" {
-		return RegionsByContinent(geo.ContinentFromString(loc.Continent))
-	}
-	if loc.GlobalRegion != "" {
-		regions := make([]string, 0)
+		regions = RegionsByCountry(loc.CountryCode)
+	} else if loc.Continent != "" {
+		regions = RegionsByContinent(geo.ContinentFromString(loc.Continent))
+	} else if loc.GlobalRegion != "" {
+		regions = make([]string, 0)
 		continents := geo.GetContinents(geo.RegionFromString(loc.GlobalRegion))
 		for _, c := range continents {
 			regions = append(regions, RegionsByContinent(c)...)
 		}
-		return regions
-	} else {
-		return RegionsByCountry("US") // default to US if nothing specified.
 	}
-	return []string{} // shouldn't get here
+	if len(regions) == 0 {
+		if preferred == "" {
+			return RegionsByCountry("US") // default to US if nothing specified.
+		} else {
+			regions = RegionsByCountry("US")
+		}
+	}
+	if preferred != "" {
+		for _, r := range regions {
+			if r == preferred {
+				return []string{r}
+			}
+		}
+	}
+	return regions
 }
 
 func resolveLocation(region string) (common.Location, error) {
