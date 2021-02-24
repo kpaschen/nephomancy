@@ -95,6 +95,10 @@ func (r *CostCommand) Run(args []string) int {
 		}
 		// Maybe call a consistency checker here?
 		costs, err := prov.GetCost(project)
+		if err != nil {
+			log.Fatalf("Failed to get costs for provider %s: %v\n",
+				provName, err)
+		}
 
 		for _, c := range costs {
 			if err = reporter.AddLine(c); err != nil {

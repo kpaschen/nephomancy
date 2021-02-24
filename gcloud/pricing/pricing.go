@@ -27,7 +27,8 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			return nil, err
 		}
 		for idx, vc := range vmcosts {
-			vmcosts[idx] = append([]string{p.Name, vmset.Name}, vc...)
+			vmcosts[idx] = append([]string{
+				p.Name, assets.GcloudProvider, vmset.Name}, vc...)
 		}
 		costs = append(costs, vmcosts...)
 	}
@@ -46,7 +47,8 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		dcosts = append([]string{p.Name, dset.Name}, dcosts...)
+		dcosts = append([]string{
+			p.Name, assets.GcloudProvider, dset.Name}, dcosts...)
 		costs = append(costs, dcosts)
 
 		if dset.Template.Image != nil {
@@ -59,7 +61,8 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			icosts = append([]string{p.Name, dset.Template.Image.Name},
+			icosts = append([]string{
+				p.Name, assets.GcloudProvider, dset.Template.Image.Name},
 				icosts...)
 			costs = append(costs, icosts)
 		}
@@ -79,7 +82,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		c = append([]string{p.Name, vmset.Name}, c...)
+		c = append([]string{p.Name, assets.GcloudProvider, vmset.Name}, c...)
 		costs = append(costs, c)
 	}
 	for _, nw := range p.Networks {
@@ -98,7 +101,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			ncosts[0] = append([]string{p.Name, snw.Name}, c1...)
+			ncosts[0] = append([]string{p.Name, assets.GcloudProvider, snw.Name}, c1...)
 			internalEgressSkus, _ := cache.GetSkusForInternalEgress(
 				db, region)
 			pi, _ = cache.GetPricingInfo(db, internalEgressSkus)
@@ -106,7 +109,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			ncosts[1] = append([]string{p.Name, snw.Name}, c2...)
+			ncosts[1] = append([]string{p.Name, assets.GcloudProvider, snw.Name}, c2...)
 			costs = append(costs, ncosts...)
 		}
 	}

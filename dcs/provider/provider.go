@@ -36,7 +36,7 @@ func (d *DcsProvider) GetCost(p *resources.Project) ([][]string, error) {
 	if d.DbHandle == nil {
 		return nil, fmt.Errorf("Provider has not been initialized\n")
 	}
-	return nil, nil
+	return cache.GetCost(d.DbHandle, p)
 }
 
 func init() {

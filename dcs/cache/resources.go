@@ -35,7 +35,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	if p.ProviderDetails == nil {
 		p.ProviderDetails = make(map[string](*anypb.Any))
 	}
-	sla := "basic"
+	sla := "Basic"
 	if p.ProviderDetails[resources.DcsProvider] == nil {
 		details, _ := ptypes.MarshalAny(&resources.DcsProject{
 			Sla: sla,

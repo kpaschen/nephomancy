@@ -200,12 +200,12 @@ func populateBandwidthCosts(db *sql.DB) error {
 	// The prices are currently the same at all SLAs
 	// You can get higher bandwidths but the prices are just multiples of
 	// this one, so 100MBit/s is 0.20800 etc.
-	stmt.Exec("Basic", 10, "Mbit/s",
-		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor)
-	stmt.Exec("Standard", 10, "Mbit/s",
-		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor)
-	stmt.Exec("Advanced", 10, "Mbit/s",
-		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor)
+	stmt.Exec("Basic", "Mbit/s",
+		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor, 10)
+	stmt.Exec("Standard", "Mbit/s",
+		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor, 10)
+	stmt.Exec("Advanced", "Mbit/s",
+		"One hour of symmetric bandwidth 10Mbit/s", "CHF", 0.02080*nanoFactor, 10)
 	return nil
 }
 
