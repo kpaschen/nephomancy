@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-var header = []string{"project name", "resource name", "resource type", "count", "spec",
+var header = []string{"project name", "cloud provider", "resource name", "resource type", "count", "spec",
 	"max usage", "max cost", "projected usage", "projected cost"}
 
 type CostReporter struct {

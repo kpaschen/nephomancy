@@ -449,8 +449,10 @@ type Disk struct {
 	Type     *DiskType `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
 	// the size in the disk type is the maximum size for the disk. The actual
 	// size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
+	// TODO: this is not a useful difference for most cloud providers.
 	ActualSizeGb uint64 `protobuf:"varint,3,opt,name=actual_size_gb,json=actualSizeGb,proto3" json:"actual_size_gb,omitempty"`
 	// For now, a disk can have 0 or 1 image on it.
+	// TODO: which providers have this?
 	Image *Image `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
 	// You can have one detail per provider.
 	ProviderDetails map[string]*anypb.Any `protobuf:"bytes,5,rep,name=provider_details,json=providerDetails,proto3" json:"provider_details,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
@@ -532,8 +534,12 @@ type DiskSet struct {
 	Name     string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // Just for display
 	Template *Disk  `protobuf:"bytes,2,opt,name=template,proto3" json:"template,omitempty"`
 	Count    uint32 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	// for cost estimate: how much of the available space do you expect to be using (avg per month)
 	// When this is not set, the cost estimate will be based on full usage.
+	// Some providers (e.g. Google) only charge you for how much of the disk you have
+	// filled up. You can then either set Disk.actual_size_gb to how much you're
+	// using, or you can use the percent_used_avg here to express how full the disk is.
+	// You could, alternatively, use this to express that the disk only exists for part
+	// of a month (similar to the usage_hours_per_month on InstanceSet).
 	PercentUsedAvg uint32 `protobuf:"varint,4,opt,name=percent_used_avg,json=percentUsedAvg,proto3" json:"percent_used_avg,omitempty"`
 }
 

@@ -6,6 +6,9 @@ package model;
 option go_package = ".;resources";
 
 // DCS has an OS License tied to each VM.
+// DCS cost reporting uses "CU", which are 0.1GHz worth of a CPU.
+// However, the costs in the pdf I used as basis here are for
+// 1vCPU, corresponding to 10 CU.
 message DcsVM {
   string os_license = 1;  // Microsoft Windows or Red Hat
 }

@@ -85,8 +85,10 @@ message Disk {
   DiskType type = 2; 
   // the size in the disk type is the maximum size for the disk. The actual
   // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
+  // TODO: this is not a useful difference for most cloud providers.
   uint64 actual_size_gb = 3;
   // For now, a disk can have 0 or 1 image on it.
+  // TODO: which providers have this?
   Image image = 4;
   // You can have one detail per provider.
   map<string, google.protobuf.Any> provider_details = 5;
@@ -97,8 +99,12 @@ message DiskSet {
   string name = 1; // Just for display
   Disk template = 2;
   uint32 count = 3;
-  // for cost estimate: how much of the available space do you expect to be using (avg per month)
   // When this is not set, the cost estimate will be based on full usage.
+  // Some providers (e.g. Google) only charge you for how much of the disk you have
+  // filled up. You can then either set Disk.actual_size_gb to how much you're
+  // using, or you can use the percent_used_avg here to express how full the disk is.
+  // You could, alternatively, use this to express that the disk only exists for part
+  // of a month (similar to the usage_hours_per_month on InstanceSet).
   uint32 percent_used_avg = 4;
 }
 
