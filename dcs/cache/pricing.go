@@ -60,10 +60,78 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		costs = append(costs, dcosts...)
 	}
 	for _, nw := range p.Networks {
-		for _, gw := range nw.Gateways {
-			// Type
-			_ = gw
+		nwcosts, err := networkCostRange(db, sla, *nw)
+		if err != nil {
+			return nil, err
 		}
+		costs = append(costs, nwcosts...)
+	}
+	return costs, nil
+}
+
+func networkCostRange(db *sql.DB, sla string, network common.Network) (
+	[][]string, error) {
+	ipAddrCount := network.IpAddresses
+	bandwidthMBits := network.BandwidthMbits
+	costs := make([][]string, 0)
+	// the max number of IP Addresses is: 2^(32 - Cidr) - 5
+	cidr := uint32(32 - math.Log2(float64(ipAddrCount + 5)))
+	fmt.Printf("cidr for %d ip addresses is %d\n", ipAddrCount, cidr)
+	priceIPAddr, err := executePriceQuery(db, "IpAddrCosts", sla,
+		fmt.Sprintf(` AND Cidr >= %d `, cidr))
+	if err != nil {
+		return nil, err
+	}
+	// This is the price for 10 MBit/s
+	pricePer10MBits, err := executePriceQuery(db, "BandwidthCosts", sla, "")
+	if err != nil {
+		return nil, err
+	}
+	priceBandwidth := float64(pricePer10MBits) * math.Ceil(float64(bandwidthMBits) / 10.0) / math.Pow(10, 9)
+	hoursPerMonth := uint32(24 * 30)
+	costs = append(costs, []string{
+		"IP Addresses",
+		fmt.Sprintf("%d", ipAddrCount),
+		fmt.Sprintf("ip addresses: /%d cidr", cidr),
+		fmt.Sprintf("%d addresses for %d h per month", ipAddrCount, hoursPerMonth),
+		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth) / math.Pow(10, 9)),
+		fmt.Sprintf("%d addresses for %d h per month", ipAddrCount, hoursPerMonth),
+		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth) / math.Pow(10, 9)),
+	})
+	costs = append(costs, []string{
+		"Bandwidth",
+		fmt.Sprintf("%d", bandwidthMBits),
+		fmt.Sprintf("Bandwidth in MBit/s"),
+		fmt.Sprintf("%d MBit/s for %d h per month", bandwidthMBits, hoursPerMonth),
+		fmt.Sprintf("%.2f CHF", priceBandwidth*float64(hoursPerMonth)),
+		fmt.Sprintf("%d MBit/s for %d h per month", bandwidthMBits, hoursPerMonth),
+		fmt.Sprintf("%.2f CHF", priceBandwidth*float64(hoursPerMonth)),
+	})
+
+	for _, gw := range network.Gateways {
+		var dcsGw resources.DcsGateway
+		err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
+		if err != nil {
+			return nil, err
+		}
+		gwType := dcsGw.Type
+		if gwType == "" {
+			gwType = "Eco" // Default, free.
+		}
+		priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
+		fmt.Sprintf(` AND Type="%s" `, gwType))
+		if err != nil {
+			return nil, err
+		}
+		costs = append(costs, []string{
+			"Gateway",
+			"1",
+			fmt.Sprintf("Gateway of type %s", gwType),
+			fmt.Sprintf("for %d h per month", hoursPerMonth),
+			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth) / math.Pow(10, 9)),
+			fmt.Sprintf("for %d h per month", hoursPerMonth),
+			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth) / math.Pow(10, 9)),
+		})
 	}
 	return costs, nil
 }
