@@ -75,7 +75,7 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	bandwidthMBits := network.BandwidthMbits
 	costs := make([][]string, 0)
 	// the max number of IP Addresses is: 2^(32 - Cidr) - 5
-	cidr := uint32(32 - math.Log2(float64(ipAddrCount + 5)))
+	cidr := uint32(32 - math.Log2(float64(ipAddrCount+5)))
 	fmt.Printf("cidr for %d ip addresses is %d\n", ipAddrCount, cidr)
 	priceIPAddr, err := executePriceQuery(db, "IpAddrCosts", sla,
 		fmt.Sprintf(` AND Cidr >= %d `, cidr))
@@ -87,16 +87,16 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	if err != nil {
 		return nil, err
 	}
-	priceBandwidth := float64(pricePer10MBits) * math.Ceil(float64(bandwidthMBits) / 10.0) / math.Pow(10, 9)
+	priceBandwidth := float64(pricePer10MBits) * math.Ceil(float64(bandwidthMBits)/10.0) / math.Pow(10, 9)
 	hoursPerMonth := uint32(24 * 30)
 	costs = append(costs, []string{
 		"IP Addresses",
 		fmt.Sprintf("%d", ipAddrCount),
 		fmt.Sprintf("ip addresses: /%d cidr", cidr),
 		fmt.Sprintf("%d addresses for %d h per month", ipAddrCount, hoursPerMonth),
-		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth) / math.Pow(10, 9)),
+		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth)/math.Pow(10, 9)),
 		fmt.Sprintf("%d addresses for %d h per month", ipAddrCount, hoursPerMonth),
-		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth) / math.Pow(10, 9)),
+		fmt.Sprintf("%.2f CHF", float64(priceIPAddr*hoursPerMonth)/math.Pow(10, 9)),
 	})
 	costs = append(costs, []string{
 		"Bandwidth",
@@ -119,7 +119,7 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 			gwType = "Eco" // Default, free.
 		}
 		priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
-		fmt.Sprintf(` AND Type="%s" `, gwType))
+			fmt.Sprintf(` AND Type="%s" `, gwType))
 		if err != nil {
 			return nil, err
 		}
@@ -128,9 +128,9 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 			"1",
 			fmt.Sprintf("Gateway of type %s", gwType),
 			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth) / math.Pow(10, 9)),
+			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
 			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth) / math.Pow(10, 9)),
+			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
 		})
 	}
 	return costs, nil
