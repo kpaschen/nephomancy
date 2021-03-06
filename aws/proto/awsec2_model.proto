@@ -1,0 +1,110 @@
+// AWS EC2-specific extensions for the asset model
+
+syntax = "proto3";
+
+package model;
+option go_package = ".;assets";
+
+// Product families: Compute Instance, Compute Instance (bare metal),
+// Dedicated Host
+message Ec2VM {
+  string instance_type = 1;  // The full instance type, such as "t3.medium"
+  string region = 2; // The Aws Region, for a regional instance
+  string zone = 3; // Wavelength Zone or local Zone, for a zonal instance
+  string term_type = 4;  // OnDemand or Reserved
+  string purchase_option = 5; // only for TermType=Reserved: "No Upfront", "Partial Upfront" or "All Upfront"
+  string offering_class = 6; // Only for TermType=Reserved: "convertible" or "standard"
+
+  string tenancy = 7; // Dedicated, Shared, Host, NA, Reserved
+  string os = 8; // Linux, SUSE, Windows, RHEL, NA (I think NA is for products
+                 // that don't use the os? not sure.)
+
+  // No License required, Bring your own license, NA -- not sure if relevant here.
+  string license_model = 9;
+
+  string capacity_status = 10; // UnusedCapacityReservation, AllocatedCapacityReservation, Used or NA. Not sure if relevant here.
+
+  // not sure what "operation" stands for. It looks like it's related
+  // to a "Usag eoperation" that you can see on your bill or
+  // in 'aws describe-images'. Is it how you launch these instances?
+
+  // General purpose, Storage optimized, Memory optimized, Compute optimized,
+  // Machine Learning ASIC Instances, GPU instance, FPGA instance, Micro instances
+  // This is implied by the instance type, so should be folded into instance types.
+  string instance_family = x; 
+  // Also implied by instance type. same for physical_processor I think.
+  // may want to have processor_architecture on the instance type as well.
+  string clock_speed = x;
+  // EBS only, n x x00 SSD, n x x00 NvMe SSD, n x x00 HDD, depends on instance type.
+  // when it's not EBS only, this is "Instance Store", which is included in the
+  // instance price. When it's EBS only, you need to attach an EBS volume (listed
+  // under disks below).
+  string storage = x;
+  // "Up to x Gigabit, Moderate, High, x Gigabit. depends on instance type.
+  string network_performance = x;
+  // only values are "Yes" or empty, only available for some instance types.
+  string ebs_optimized = x;
+  // x Mbps, Up to x Mbps  
+  string dedicated_ebs_throughput = x;
+  // EC2 Compute Unit -- relative cpu power of instance.
+  int32 ecu = x;
+  // True when "Elastic Graphics Type"="Elastic Graphics"
+  bool elastic_graphics_supported = x; // true for eg1.xxx machines.
+  bool enhanced_networking_supported = x;
+  int32 GPU = x;  // GPU Memory is always empty.
+
+}
+
+// Product Family: Storage, Storage Snapshot, Fast Snapshot Restore,
+// Provisioned IOPS,  EBS direct API Requests, System Operation,
+// Provisioned Throughput
+message Ec2Disk {
+  string storage_media = 1;  // SSD-Backed or HDD-backed. Occasionally S3.
+  // The volume type is user-readable and coarser than the api name.
+  // However, all the interesting data about the disk capacity depends
+  // only on the volume type.
+  string volume_type = 2; // General Purpose, Throughput Optimized HDD, Cold HDD, Magnetic. Not sure where "Provisioned IOPS" goes.
+
+  // This needs to be part of the SKU resolution, or maybe just make it the
+  // PK of the volume types table.
+  // However, storage media "Amazon S3" does not have a volume api name.
+  // but then, amazon s3 only has snapshot stuff in its usage types.
+  // string volume_api_name = 3; // io1, gp2, io2, st1, io1, gp3, sc1, standard, gp3, io2, gp3
+
+  // the following all depend on the volume type
+  uint32 max_volume_size = 3;  // in TiB
+  uint32 max_iops_volume = 4;  // usually based on 1MiB I/O size
+  uint32 max_throughput_volume = 5; // in MiB/s
+
+  // sample iops string:
+  // 64000 or "500 - based on 1 MiB I/O size" or "40 - 200"
+  // sample throughput string:
+  // 1000 MiB/s or 40 - 90 MB/sec
+
+  // For EBS direct API requests: there is a field called ResourceType
+  // with values Get:Snapshot, List:Snapshot, Put:snapshot
+
+  // maybe: group, group description?
+
+// Provisioned Throughput always has "Provisioned"="Yes". System Operation can
+// be provisioned or not. Nothing else uses the provisioned field.
+  // bool provisioned = x
+  
+}
+
+message Ec2Network {
+  // Product Family: Load Balancer-Application, Load Balancer,
+  // Load Balancer-Network, NAT Gateway, IP Address, Data Transfer
+
+  // data transfer has a transfer_type field with values
+  // InterRegoin Outbound, IntraRegion, InterRegion Inbound,
+  // AWS Outbound, AWS Inbound
+  // data transfer is also the only product family that uses the "From Location"
+  // and "To Location" fields
+}
+
+// Other product families: 
+// Elastic Graphics
+// CPU Credits and Fee are mostly for pricing/billing
+
+

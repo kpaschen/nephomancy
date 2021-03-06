@@ -8,14 +8,19 @@ import (
 )
 
 func PopulateDatabase(db *sql.DB) error {
-	return populateRegions(db)
+	if err := populateRegions(db); err != nil {
+		return err
+	}
+	if err := getPricesInBulk(db, "", "index.json"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func populateRegions(db *sql.DB) error {
 	insert := `REPLACE INTO Regions(ID, DisplayName, Country, Continent, Special)
 	VALUES(?, ?, ?, ?, ?)`
 	stmt, err := db.Prepare(insert)
-	_ = stmt
 	if err != nil {
 		return err
 	}

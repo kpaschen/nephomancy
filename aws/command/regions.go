@@ -22,11 +22,11 @@ func (r *RegionsCommand) Run(args []string) int {
 	fs := r.Command.DefaultFlagSet("awsRegions")
 	fs.Parse(args)
 
-	regions, err := resources.ListRegions()
-	// regions, err := resources.ListServices()
+	// regions, err := resources.ListRegions()
+	_, err := resources.ListServices()
 	if err != nil {
 		log.Fatalf("Failed to list aws regions: %v\n", err)
 	}
-	_ = regions
+	// _ = regions
 	return 0
 }

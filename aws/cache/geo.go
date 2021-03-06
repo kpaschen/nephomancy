@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"nephomancy/common/geo"
+	"strings"
 )
 
 // Returns the common.geo continent for an AWS region.
@@ -165,4 +166,25 @@ func RegionsByCountry(db *sql.DB, cc string) ([]string, error) {
 		regions = append(regions, regionId)
 	}
 	return regions, nil
+}
+
+func RegionByDisplayName(db *sql.DB, name string) (string, error) {
+	normalName := strings.Replace(name, "EU", "Europe", 1)
+	query := `SELECT ID from Regions WHERE DisplayName=?;`
+	res, err := db.Query(query, normalName)
+	if err != nil {
+		return "", err
+	}
+	defer res.Close()
+	var regionId string
+	if res.Next() {
+		err = res.Scan(&regionId)
+		if err != nil {
+			return "", fmt.Errorf("Error scanning row: %v", err)
+		}
+		return regionId, nil
+	}
+	log.Printf("Did not find a region for display name %s normalized to %s",
+		name, normalName)
+	return "", nil
 }

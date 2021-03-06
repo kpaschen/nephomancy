@@ -20,23 +20,25 @@ func ListServices() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("services: %+v\n", services)
+	fmt.Printf("services: %+v\n", services)
 	// The products are actually the resource types.
-	products, err := svc.GetProducts(&pricing.GetProductsInput{
-		ServiceCode: aws.String("AmazonEC2"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("products: %+v\n", products)
+	/*
+		products, err := svc.GetProducts(&pricing.GetProductsInput{
+			ServiceCode: aws.String("AmazonEC2"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("products: %+v\n", products)
 
-	values, err := svc.GetAttributeValues(&pricing.GetAttributeValuesInput{
-		ServiceCode:   aws.String("AmazonEC2"),
-		AttributeName: aws.String("location"),
-	})
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("values for location: %+v\n", values)
+		values, err := svc.GetAttributeValues(&pricing.GetAttributeValuesInput{
+			ServiceCode:   aws.String("AmazonEC2"),
+			AttributeName: aws.String("location"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("values for location: %+v\n", values)
+	*/
 	return nil, nil
 }

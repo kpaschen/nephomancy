@@ -20,7 +20,7 @@ func ListRegions() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("regions: %+v\n", regions)
+	fmt.Printf("regions: %+v\n", regions)
 	// Lightsail has pieces of the display names, but not for all regions
 	// (e.g. govcloud is missing).
 	ls := lightsail.New(sess)
@@ -30,7 +30,7 @@ func ListRegions() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("lightsail regions: %+v\n", lr)
+	fmt.Printf("lightsail regions: %+v\n", lr)
 	// Or one can clone the aws go sdk and browse around ...
 	resolvers := endpoints.DefaultPartitions()
 	for _, partition := range resolvers {
