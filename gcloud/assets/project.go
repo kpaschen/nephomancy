@@ -368,6 +368,10 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 			}
 		}
 	}
+	os, err := a.os()
+	if err != nil {
+		return nil, err
+	}
 	zone, _ := a.zone()
 	regions, _ := a.regions()
 	region := regions[0]
@@ -380,6 +384,7 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 		NetworkTier: networkTier,
 		Region:      region,
 		Zone:        zone,
+		OsChoice:    os,
 	})
 	if err != nil {
 		return nil, err

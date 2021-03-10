@@ -13,6 +13,13 @@ message GCloudVM {
   string scheduling = 4;
   string sharing = 5; // SoleTenancy, SharedCpu. Default is nothing.
   string network_tier = 6;
+
+  string os_choice = 7;
+
+  // boot disk: image (public | custom | snapshot | use existing disk);
+  // for public image: operating system and version
+  // for all boot disks: type (pd, ssd or standard) and size (default is 10GB)
+  // maybe just treat them all as local disks
 }
 
 message GCloudDisk {

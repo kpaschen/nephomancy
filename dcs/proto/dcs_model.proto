@@ -10,7 +10,7 @@ option go_package = ".;resources";
 // However, the costs in the pdf I used as basis here are for
 // 1vCPU, corresponding to 10 CU.
 message DcsVM {
-  string os_license = 1;  // Microsoft Windows or Red Hat
+  string os_choice = 1;
 }
 
 message DcsDisk {

@@ -7,10 +7,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"log"
-	//	"nephomancy/common/geo"
 	common "nephomancy/common/resources"
 	"nephomancy/dcs/resources"
-	//	"strings"
 )
 
 // Returns nil if spec location is compatible with Switzerland,
@@ -27,6 +25,26 @@ func checkLocation(spec common.Location) error {
 	if spec.CountryCode != "" && spec.CountryCode != "CH" {
 		return fmt.Errorf("spec country code is %s but %s is only available in Switzerland",
 			spec.CountryCode, resources.DcsProvider)
+	}
+	return nil
+}
+
+// Based on the vmset.Template.Os setting, choose an OS available on DCS.
+func chooseOs(templateOs string) string {
+	if templateOs == "Windows" {
+		return "Windows"
+	} else {
+		return "Red Hat" // Is this a good default? Windows costs less.
+	}
+}
+
+func isVmConsistent(dcsVm resources.DcsVM, template common.Instance) error {
+	if template.Os == "" {
+		return nil
+	}
+	if dcsVm.OsChoice != chooseOs(template.Os) {
+		return fmt.Errorf("template os %s does not match provider settings %s\n",
+			template.Os, dcsVm.OsChoice)
 	}
 	return nil
 }
@@ -70,10 +88,14 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
+			if err = isVmConsistent(dcsvm, *vmset.Template); err != nil {
+				return err
+			}
 			log.Printf("Instance Set %s already has details for provider %s, leaving them as they are.\n", vmset.Name, resources.DcsProvider)
 		} else { // Normal case: no provider details yet.
+			os := chooseOs(vmset.Template.Os)
 			details, _ := ptypes.MarshalAny(&resources.DcsVM{
-				OsLicense: "Red Hat", // making this the default, not sure?
+				OsChoice: os,
 			})
 			vmset.Template.ProviderDetails[resources.DcsProvider] = details
 		}

@@ -22,7 +22,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 	}
 	for _, vmset := range p.InstanceSets {
 		if vmset.Template.ProviderDetails == nil || vmset.Template.ProviderDetails[resources.DcsProvider] == nil {
-			return nil, fmt.Errorf("Missing %s provider details for instance set %s\n",
+			return nil, fmt.Errorf("missing %s provider details for instance set %s",
 				resources.DcsProvider, vmset.Name)
 		}
 		var dcsVm resources.DcsVM
@@ -145,7 +145,7 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 		backupInt = 1
 	}
 	if dtype == "" {
-		return nil, fmt.Errorf("Missing disk type information for disk set %s\n",
+		return nil, fmt.Errorf("missing disk type information for disk set %s",
 			disk.Name)
 	}
 	diskCount := disk.Count
@@ -179,9 +179,9 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 
 func vmCostRange(db *sql.DB, sla string, vm common.InstanceSet, dcsvm resources.DcsVM) (
 	[][]string, error) {
-	lic := dcsvm.OsLicense
+	lic := dcsvm.OsChoice
 	if lic == "" {
-		return nil, fmt.Errorf("Missing os license information for instance set %s\n",
+		return nil, fmt.Errorf("missing os license information for instance set %s",
 			vm.Name)
 	}
 	cpuCount := vm.Template.Type.CpuCount

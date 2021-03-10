@@ -24,9 +24,10 @@ func createTables(db *sql.DB) error {
 	// in nephomancy.
 
 	// DCS don't really have machine types. They do have SLA tiers that determine
-	// pricing for everything though. VMs can be configured by number of CUs
-	// (vCPUs basically) and GB of RAM, and are charged by the hour. I don't
-	// think they have an option to buy dedicated machines.
+	// pricing for everything though. VMs can be configured by number of vCPUs
+	// (occasionally 'CU', where it seems like 10 CU ~ 1 vCPU) and GB of RAM,
+	// and are charged by the hour. I don't think they have an option for buying
+	// dedicated machines.
 
 	createCPUCostsTableSQL := `CREATE TABLE IF NOT EXISTS CpuCosts (
 		"SLA" TEXT NOT NULL PRIMARY KEY,
@@ -51,6 +52,7 @@ func createTables(db *sql.DB) error {
 	}
 
 	// Disks come in 'fast' or 'ultra fast' and with or without backup.
+	// With DCS, Disks appear to be tied to VMs.
 	createDiskCostsTableSQL := `CREATE TABLE IF NOT EXISTS DiskCosts (
 		"SLA" TEXT NOT NULL,
 		"DiskType" STRING NOT NULL,
@@ -108,10 +110,8 @@ func createTables(db *sql.DB) error {
 		return err
 	}
 
-	// With other providers I think this would be part of a license cost for
-	// an image you're using. DCS also have additional licenses you can buy,
-	// this here is mandatory though, you have to use Windows or RedHat.
-	// Payment is by VM.
+	// The only options at the moment are Windows and RedHat, neither
+	// is free.
 	createOSCostsTableSQL := `CREATE TABLE IF NOT EXISTS OSCosts (
 		"SLA" TEXT NOT NULL,
 		"UsageUnit" STRING,
