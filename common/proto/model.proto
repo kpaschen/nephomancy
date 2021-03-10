@@ -25,6 +25,7 @@ message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
+  // TODO: local_storage (in GiB)
   // Probably want something like preemptibility and sole tenancy here as well.
 }
 
@@ -36,7 +37,7 @@ message DiskType {
   // need an enum or a flag for whether this is replicated.
 }
 
-// Operating system image.
+// Custom image or snapshot.
 message Image {
   string name = 1;
   uint32 size_gb = 2;
@@ -44,11 +45,14 @@ message Image {
 }
 
 // An instance is a virtual machine (VM) or a physical machine (sometimes called a Node).
-// TODO: maybe add external ip addresses here? At least temporary/ephemeral ones live
-// only with the VM. But static/permanent ones probably belong on the Network resource.
 message Instance {
   Location location = 1;
   MachineType type = 2;
+  // Operating System. Leave this blank if you want a default choice. Where a free OS is
+  // offered, the default choice will be free. Some providers only offer OS choices that
+  // come with a license fee.
+  string os = 3;
+
   // You can have one detail per provider. The common VM is a spec; the provider
   // details should meet the spec.
   // If you fill in provider details, they need to meet the spec, otherwise the
@@ -62,7 +66,7 @@ message Instance {
   // gcloud's n2 and e2 series), there is a provider-specific ranking of which
   // machine types the system prefers, based on what is considered "generally most
   // cost effective" (but note this is just a heuristic).
-  map<string, google.protobuf.Any> provider_details = 3;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
 // An Instance set collects similar instances. All the instances in the set are

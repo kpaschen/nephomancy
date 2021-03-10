@@ -79,6 +79,52 @@ func (a *SmallAsset) scheduling() (string, error) {
 	return "", nil
 }
 
+// a is assumed to be an instance that has at least a boot disk.
+func (a *SmallAsset) licenses() ([]string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["disks"] == nil {
+		return nil, nil
+	}
+	disks, ok := a.resourceMap["disks"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected disks to be a list of objects but it is a %T",
+			a.resourceMap["disks"])
+	}
+	licenses := make([]string, 0)
+	for _, d := range disks {
+		diskmap, ok := d.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("disk list entry is a %T", d)
+		}
+		ls, ok := diskmap["licenses"].([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("licenses are a %T", diskmap["licenses"])
+		}
+		for _, l := range ls {
+			lic, _ := l.(string)
+			licenses = append(licenses, lic)
+		}
+	}
+	return licenses, nil
+}
+
+func (a *SmallAsset) os() (string, error) {
+	licenses, err := a.licenses()
+	if err != nil {
+		return "", err
+	}
+	for _, license := range licenses {
+		parts := strings.Split(license, "/")
+		if len(parts) > 0 {
+			// ubuntu-1604-xenial
+			return OsFromLicenseName(parts[len(parts)-1]), nil
+		}
+	}
+	return "", fmt.Errorf("no os found")
+}
+
 func (a *SmallAsset) machineType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
