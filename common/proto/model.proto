@@ -25,8 +25,6 @@ message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
-  // TODO: local_storage (in GiB)
-  // Probably want something like preemptibility and sole tenancy here as well.
 }
 
 // A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
@@ -34,7 +32,6 @@ message MachineType {
 message DiskType {
   uint32 size_gb = 1;
   string disk_tech = 2;  // SSD or Standard
-  // need an enum or a flag for whether this is replicated.
 }
 
 // Custom image or snapshot.
@@ -52,6 +49,12 @@ message Instance {
   // offered, the default choice will be free. Some providers only offer OS choices that
   // come with a license fee.
   string os = 3;
+  // If the provider permits local storage, these are the local disks.
+  // These are separate from the disks contained in DiskSets; the latter are independent
+  // of Instances.
+  repeated Disk local_storage = 4;
+
+  // Probably want something like preemptibility and sole tenancy here as well.
 
   // You can have one detail per provider. The common VM is a spec; the provider
   // details should meet the spec.
@@ -66,7 +69,7 @@ message Instance {
   // gcloud's n2 and e2 series), there is a provider-specific ranking of which
   // machine types the system prefers, based on what is considered "generally most
   // cost effective" (but note this is just a heuristic).
-  map<string, google.protobuf.Any> provider_details = 4;
+  map<string, google.protobuf.Any> provider_details = 5;
 }
 
 // An Instance set collects similar instances. All the instances in the set are

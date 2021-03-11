@@ -9,6 +9,7 @@ import (
 	"log"
 	common "nephomancy/common/resources"
 	"nephomancy/dcs/resources"
+	"strings"
 )
 
 // Returns nil if spec location is compatible with Switzerland,
@@ -31,7 +32,7 @@ func checkLocation(spec common.Location) error {
 
 // Based on the vmset.Template.Os setting, choose an OS available on DCS.
 func chooseOs(templateOs string) string {
-	if templateOs == "Windows" {
+	if strings.ToLower(templateOs) == "windows" {
 		return "Windows"
 	} else {
 		return "Red Hat" // Is this a good default? Windows costs less.

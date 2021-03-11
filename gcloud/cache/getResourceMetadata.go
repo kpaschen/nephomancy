@@ -31,6 +31,17 @@ func checkVmSpec(db *sql.DB, gvm assets.GCloudVM, spec common.Instance) error {
 				assets.GcloudProvider, mt, t)
 		}
 	}
+	if os := spec.Os; os != "" {
+		gOs := gvm.OsChoice
+		if gOs == "" {
+			return fmt.Errorf("%s vm provider details do not contain os. Please choose one that matches the spec os %s.",
+				assets.GcloudProvider, os)
+		}
+		if err := assets.DoesOsMatch(os, gOs); err != nil {
+			return err
+		}
+	}
+	// TODO: also check local disk specs
 	return nil
 }
 
@@ -56,8 +67,23 @@ func checkDiskSpec(db *sql.DB, dsk assets.GCloudDisk, spec common.Disk) error {
 		}
 	}
 	// Assume for now that it doesn't matter whether there is an image attached
-	// to the disk because images are always global (?)
+	// to the disk.
 	return nil
+}
+
+func getOsBySpec(spec string) string {
+	maybe := assets.OsChoiceByName(spec)
+	if maybe != assets.UnspecifiedOs {
+		return maybe.String()
+	}
+	s := strings.ToLower(spec)
+	if s == "linux" {
+		return assets.Ubuntu.String()
+	}
+	if s == "windows" {
+		return assets.WindowsServer.String()
+	}
+	return ""
 }
 
 // Populates provider-specific details from spec if they are empty.
@@ -75,7 +101,10 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			return fmt.Errorf("missing vmset location information")
 		}
 		if vmset.Template.Type == nil {
-			return fmt.Errorf("missing vmset template information\n")
+			return fmt.Errorf("missing vmset type information")
+		}
+		if vmset.Template.Os == "" {
+			return fmt.Errorf("missing vmset os information")
 		}
 		if vmset.Template.ProviderDetails == nil {
 			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
@@ -109,9 +138,16 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if err != nil {
 				return err
 			}
+			// TODO: are all OS available for all machine types?
+			os := getOsBySpec(vmset.Template.Os)
+			if os == "" {
+				return fmt.Errorf("provider %s does not support an os matching %s",
+					assets.GcloudProvider, vmset.Template.Os)
+			}
 			details, err := ptypes.MarshalAny(&assets.GCloudVM{
 				MachineType: mt,
 				Region:      r[0], // only using first region
+				OsChoice:    os,
 			})
 			if err != nil {
 				return err
@@ -120,6 +156,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if locations[locstring] == "" {
 				locations[locstring] = r[0]
 			}
+			// TODO: also add local disk provider details.
 			vmset.Template.ProviderDetails[assets.GcloudProvider] = details
 		}
 	}
@@ -242,6 +279,18 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 		}
 		if vmset.UsageHoursPerMonth == 0 {
 			vmset.UsageHoursPerMonth = 24 * 30 // full usage
+		}
+		if vmset.Template.Os == "" {
+			if gvm.OsChoice != "" {
+				choice := assets.OsChoiceByName(gvm.OsChoice)
+				if assets.IsLinux(choice) {
+					vmset.Template.Os = "linux"
+				} else if assets.IsWindows(choice) {
+					vmset.Template.Os = "windows"
+				} else {
+					fmt.Errorf("unsupported os choice %s", gvm.OsChoice)
+				}
+			}
 		}
 	}
 	for _, dset := range p.DiskSets {

@@ -110,6 +110,28 @@ func (a *SmallAsset) licenses() ([]string, error) {
 	return licenses, nil
 }
 
+func (a *SmallAsset) localDisks() ([]interface{}, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["disks"] == nil {
+		return nil, nil
+	}
+	disks, ok := a.resourceMap["disks"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected disks to be a list of objects but it is a %T",
+			a.resourceMap["disks"])
+	}
+	ret := make([]interface{}, 0)
+	for _, d := range disks {
+		dk, _ := d.(map[string]interface{})
+		if dk["type"] != "PERSISTENT" {
+			ret = append(ret, dk)
+		}
+	}
+	return ret, nil
+}
+
 func (a *SmallAsset) os() (string, error) {
 	licenses, err := a.licenses()
 	if err != nil {

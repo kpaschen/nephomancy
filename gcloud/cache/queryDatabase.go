@@ -90,6 +90,50 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 	}
 }
 
+func GetSkusForLicense(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
+	os := assets.OsChoiceByName(gvm.OsChoice)
+	rg := os.ResourceGroup()
+	if rg == "Unspecified" {
+		return nil, fmt.Errorf("missing os choice")
+	}
+	var querySku strings.Builder
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku WHERE Sku.ResourceFamily='License'
+	AND Sku.ResourceGroup='%s' `, rg)
+
+	// Some license skus have 'Google' as their ResourceGroup.
+	if rg == "Google" {
+		if os == assets.RedHatEnterpriseLinuxForSAP {
+			fmt.Fprintf(&querySku, "AND Sku.Description like '%% RHEL 7 with SAP Applications %%' ")
+		} else if os == assets.SUSELinuxEnterpriseServer {
+			fmt.Fprintf(&querySku, "AND Sku.Description like '%% SUSE Linux Enterprise Server %%' ")
+		}
+	} else if os == assets.FedoraCoreOs {
+		fmt.Fprintf(&querySku, "AND Sku.Description like '%% Stable %%' ")
+	} else if os == assets.RedHatEnterpriseLinux {
+		fmt.Printf("TODO: add query based on vcpu count")
+	} else if os == assets.SQLServerOnWindowsServer {
+		fmt.Printf("TODO: add query based on vcpu count")
+	}
+
+	machineType := gvm.MachineType
+	parts := strings.Split(machineType, "-")
+	if parts[0] == "f1" {
+		querySku.WriteString(" AND Sku.Description like '%% on f1-micro' ")
+	} else if parts[0] == "g1" {
+		querySku.WriteString(" AND Sku.Description like '%% on g1-small' ")
+	} else {
+		querySku.WriteString(` AND (Sku.Description like '%% (RAM cost)' OR
+		Sku.Description like '%% (CPU cost)' `)
+		if parts[0] == "a2" {
+			querySku.WriteString(`OR Sku.Description like '%% (GPU cost)'`)
+		}
+		querySku.WriteString(")")
+	}
+	querySku.WriteString(";")
+	fmt.Printf("license query: %s\n", querySku.String())
+	return getSkusForQuery(db, querySku.String())
+}
+
 func GetSkusForInstance(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{gvm.Region})

@@ -39,12 +39,20 @@ func (c *ServicesCommand) Run(args []string) int {
 		log.Fatalf("Need a project ID. You can see the IDs on the GCloud console.\n")
 	}
 	projectPath := fmt.Sprintf("projects/%s", project)
+	_ = projectPath
 
-	regions, err := assets.ListRegions(project)
+	/*
+		regions, err := assets.ListRegions(project)
+		if err != nil {
+			log.Fatalf("Failed to get regions: %v", err)
+		}
+		fmt.Printf("regions: %v", regions)
+	*/
+	mt, err := assets.ListMachineTypes(project, "europe-west1-b")
 	if err != nil {
-		log.Fatalf("Failed to get regions: %v", err)
+		log.Fatalf("Failed to get machine types: %v", err)
 	}
-	fmt.Printf("regions: %v", regions)
+	fmt.Printf("machine types: %+v\n", mt)
 
 	/*
 		err = assets.ListServices(projectPath)
@@ -54,10 +62,12 @@ func (c *ServicesCommand) Run(args []string) int {
 	*/
 
 	// err = assets.ListMetrics(projectPath, `metric.type=starts_with("compute.googleapis.com")`)
-	err = assets.ListMetrics(projectPath)
-	if err != nil {
-		log.Fatalf("Failed to get metrics: %v", err)
-	}
+	/*
+		err = assets.ListMetrics(projectPath)
+		if err != nil {
+			log.Fatalf("Failed to get metrics: %v", err)
+		}
+	*/
 
 	return 0
 }

@@ -16,8 +16,6 @@ func GetProviderNames(p Project) []string {
 			}
 		}
 	}
-	// Should do the same for disks etc
-
 	ret := make([]string, len(providers))
 	idx := 0
 	for p, _ := range providers {
@@ -90,6 +88,7 @@ func makeSampleInstanceSet(loc *Location) *InstanceSet {
 		Template: &Instance{
 			Location: loc,
 			Type:     &mt,
+			Os:       "linux",
 		},
 		Count:              1,
 		UsageHoursPerMonth: 720,

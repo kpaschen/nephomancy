@@ -17,6 +17,10 @@ message DcsDisk {
   // DCS disks come in "fast" or "ultra fast". Just based on the numbers
   // published on their web site, I guess that "fast" is HDD and "ultra fast"
   // is SDD-based, at least as of Feb 2021.
+  // Technically, I think DCS disks should be treated as 'local' disks because
+  // they are always attached to a VM. However, because this is really the only
+  // volume type you can configure and because they are quite configurable, they
+  // are treated in the disk set message.
   string disk_type = 1; 
   bool with_backup = 2;
 }
