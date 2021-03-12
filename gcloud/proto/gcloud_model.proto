@@ -16,17 +16,18 @@ message GCloudVM {
 
   string os_choice = 7;
 
-  // boot disk: image (public | custom | snapshot | use existing disk);
-  // for public image: operating system and version
-  // for all boot disks: type (pd, ssd or standard) and size (default is 10GB)
-  // maybe just treat them all as local disks
+  // Not all machine types support local ssd. That restriction
+  // is documented online, but the information is not accessible
+  // via the API (or I haven't found it), so it's not modeled here.
 }
 
 message GCloudDisk {
   string disk_type = 1;
   bool is_regional = 2;
   string region = 3;
-  string zone = 4;  // only for zonal disks
+  string zone = 4;  // only for zonal disks; regional disks have replica zones,
+                    // which are not modeled here because (I think) they are
+                    // irrelevant for cost.
 }
 
 message GCloudSubnetwork {

@@ -25,6 +25,11 @@ message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
+
+  // could have a field here for whether this machine type supports
+  // local disks and whether it's nvme, scsi, or both.
+  // But not all providers have this feature, so maybe better only on
+  // specific provider details?
 }
 
 // A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
@@ -52,6 +57,9 @@ message Instance {
   // If the provider permits local storage, these are the local disks.
   // These are separate from the disks contained in DiskSets; the latter are independent
   // of Instances.
+  // Not all providers support local disks. Even those that do, don't support
+  // them for all choices of machine type. When in doubt, specify your
+  // block storage requirements in a DiskSet rather than here. 
   repeated Disk local_storage = 4;
 
   // Probably want something like preemptibility and sole tenancy here as well.

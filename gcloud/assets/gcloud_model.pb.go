@@ -131,7 +131,7 @@ type GCloudDisk struct {
 	DiskType   string `protobuf:"bytes,1,opt,name=disk_type,json=diskType,proto3" json:"disk_type,omitempty"`
 	IsRegional bool   `protobuf:"varint,2,opt,name=is_regional,json=isRegional,proto3" json:"is_regional,omitempty"`
 	Region     string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
-	Zone       string `protobuf:"bytes,4,opt,name=zone,proto3" json:"zone,omitempty"` // only for zonal disks
+	Zone       string `protobuf:"bytes,4,opt,name=zone,proto3" json:"zone,omitempty"` // only for zonal disks; regional disks have replica zones,
 }
 
 func (x *GCloudDisk) Reset() {

@@ -297,6 +297,9 @@ type Instance struct {
 	// If the provider permits local storage, these are the local disks.
 	// These are separate from the disks contained in DiskSets; the latter are independent
 	// of Instances.
+	// Not all providers support local disks. Even those that do, don't support
+	// them for all choices of machine type. When in doubt, specify your
+	// block storage requirements in a DiskSet rather than here.
 	LocalStorage []*Disk `protobuf:"bytes,4,rep,name=local_storage,json=localStorage,proto3" json:"local_storage,omitempty"`
 	// You can have one detail per provider. The common VM is a spec; the provider
 	// details should meet the spec.

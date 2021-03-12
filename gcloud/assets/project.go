@@ -380,12 +380,15 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	}
 	disks := make([]*common.Disk, len(localdisks))
 	for idx, ld := range localdisks {
+		// Could check here whether the chosen machine type even
+		// supports local ssd.
 		d, _ := ld.(map[string](interface{}))
 		sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
 		disks[idx] = &common.Disk{
 			Type: &common.DiskType{
 				SizeGb: uint32(sizeGb),
-				// TODO: determine actual disk type
+				// Local Disks on Google are always SSD.
+				// They can be attached using NvME or SCSI.
 				DiskTech: "SSD",
 			},
 		}

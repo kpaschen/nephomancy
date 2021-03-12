@@ -100,7 +100,7 @@ func (a *SmallAsset) licenses() ([]string, error) {
 		}
 		ls, ok := diskmap["licenses"].([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("licenses are a %T", diskmap["licenses"])
+			continue // non-boot disks may not have a license
 		}
 		for _, l := range ls {
 			lic, _ := l.(string)
@@ -196,7 +196,14 @@ func (a *SmallAsset) regions() ([]string, error) {
 		return nil, err
 	}
 	regions := make([]string, 0)
-	if a.resourceMap["zone"] != nil {
+	if a.resourceMap["region"] != nil {
+		region, _ := a.resourceMap["region"].(string)
+		path := strings.Split(region, "/")
+		r := path[len(path)-1]
+		regions = append(regions, r)
+		// A regional disk will have 'region' and 'replicaZones' set, but the
+		// replica zones will all be in the same region.
+	} else if a.resourceMap["zone"] != nil {
 		zone, ok := a.resourceMap["zone"].(string)
 		if !ok {
 			return nil, fmt.Errorf("expected zone to be a string but it is a %T", a.resourceMap["zone"])
@@ -208,24 +215,21 @@ func (a *SmallAsset) regions() ([]string, error) {
 		// europe-west1. The other region value is 'global' but there is no zone for that
 		// in the resources afaik.
 		regions = append(regions, z[:len(z)-2])
-	} else {
-		if a.resourceMap["storageLocations"] != nil {
-			loc, ok := a.resourceMap["storageLocations"].([]interface{})
+	} else if a.resourceMap["storageLocations"] != nil {
+		loc, ok := a.resourceMap["storageLocations"].([]interface{})
+		if !ok {
+			fmt.Printf("expected sl to be a string array but it is a %T\n",
+				a.resourceMap["storageLocations"])
+			return nil, nil
+		}
+		for _, l := range loc {
+			r, ok := l.(string)
 			if !ok {
-				fmt.Printf("expected sl to be a string array but it is a %T\n",
-					a.resourceMap["storageLocations"])
+				fmt.Printf("expected l to be a string but it is a %T\n", l)
 				return nil, nil
 			}
-			for _, l := range loc {
-				r, ok := l.(string)
-				if !ok {
-					fmt.Printf("expected l to be a string but it is a %T\n", l)
-					return nil, nil
-				}
-				regions = append(regions, r)
-			}
+			regions = append(regions, r)
 		}
-
 	}
 	return regions, nil
 }
