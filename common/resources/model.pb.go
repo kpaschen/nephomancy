@@ -557,11 +557,7 @@ type DiskSet struct {
 	Name     string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // Just for display
 	Template *Disk  `protobuf:"bytes,2,opt,name=template,proto3" json:"template,omitempty"`
 	Count    uint32 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	// When this is not set, the cost estimate will be based on full usage.
-	// Some providers (e.g. Google) only charge you for how much of the disk you have
-	// filled up. You can then either set Disk.actual_size_gb to how much you're
-	// using, or you can use the percent_used_avg here to express how full the disk is.
-	// You could, alternatively, use this to express that the disk only exists for part
+	// Use this to express that the disk only exists for part
 	// of a month (similar to the usage_hours_per_month on InstanceSet).
 	PercentUsedAvg uint32 `protobuf:"varint,4,opt,name=percent_used_avg,json=percentUsedAvg,proto3" json:"percent_used_avg,omitempty"`
 }
