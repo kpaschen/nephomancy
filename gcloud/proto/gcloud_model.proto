@@ -28,6 +28,10 @@ message GCloudDisk {
   string zone = 4;  // only for zonal disks; regional disks have replica zones,
                     // which are not modeled here because (I think) they are
                     // irrelevant for cost.
+
+  // Gcloud disk types are max values. You can create a disk
+  // of a given type and give it a smaller size.
+  uint64 actual_size_gb = 5;
 }
 
 message GCloudSubnetwork {

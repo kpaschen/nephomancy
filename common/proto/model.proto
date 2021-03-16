@@ -17,7 +17,6 @@ message Location {
   string global_region = 1; // APAC, EMEA, LATAM, NAM
   string continent = 2; // Asia, Africa, Australia, Europe, NorthAmerica, SouthAmerica
   string country_code = 3;  // ISO 2-letter country code
-  // TODO: esp. for country_code US, may want better subdivision
 }
 
 // MachineType contains specs for a physical or virtual machine (aka an Instance).
@@ -98,15 +97,9 @@ message InstanceSet {
 message Disk {
   Location location = 1;
   DiskType type = 2; 
-  // the size in the disk type is the maximum size for the disk. The actual
-  // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
-  // TODO: this is not a useful difference for most cloud providers.
-  uint64 actual_size_gb = 3;
-  // For now, a disk can have 0 or 1 image on it.
-  // TODO: which providers have this?
-  Image image = 4;
+  Image image = 3;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 5;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
 // Disks with the same location, type, and actual size
@@ -114,13 +107,9 @@ message DiskSet {
   string name = 1; // Just for display
   Disk template = 2;
   uint32 count = 3;
-  // When this is not set, the cost estimate will be based on full usage.
-  // Some providers (e.g. Google) only charge you for how much of the disk you have
-  // filled up. You can then either set Disk.actual_size_gb to how much you're
-  // using, or you can use the percent_used_avg here to express how full the disk is.
-  // You could, alternatively, use this to express that the disk only exists for part
-  // of a month (similar to the usage_hours_per_month on InstanceSet).
-  uint32 percent_used_avg = 4;
+  // Use this to express that the disk only exists for part
+  // of a month.
+  uint32 usage_hours_per_month = 4;
 }
 
 // Some providers create default subnetworks for you automatically (gcloud),

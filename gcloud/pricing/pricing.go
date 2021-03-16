@@ -75,7 +75,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		dcosts, err := diskCostRange(db, *dset, pi)
+		dcosts, err := diskCostRange(db, *dset, gdsk, pi)
 		if err != nil {
 			return nil, err
 		}
@@ -301,18 +301,19 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 	return nil, fmt.Errorf("no price found for image")
 }
 
-func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
+func diskCostRange(db *sql.DB, disk common.DiskSet,
+	gdsk assets.GCloudDisk, pricing map[string](cache.PricingInfo)) ([]string, error) {
 	if len(pricing) != 1 {
 		return nil, fmt.Errorf(
 			"expected exactly one price for disk space but got %d",
 			len(pricing))
 	}
 	diskCount := disk.Count
-	sizeGb := disk.Template.ActualSizeGb
+	sizeGb := gdsk.ActualSizeGb
 	var maxUsage uint64
 	maxUsage = sizeGb * uint64(diskCount)
 	var projectedUsage uint64
-	projectedUsage = uint64(diskCount) * maxUsage * uint64(disk.PercentUsedAvg) / 100
+	projectedUsage = uint64(diskCount) * maxUsage * uint64(disk.UsageHoursPerMonth) / (24 * 8)
 	for skuId, price := range pricing {
 		_ = skuId
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
@@ -362,7 +363,7 @@ func localDiskCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 		fmt.Printf("sku %s pricing: %+v pe: %+v\n", skuId, price, pe)
 		maxUsage = uint64(30 * 24 * vmCount * totalSizeGb)
 		projectedUsage = uint64(usage * vmCount *
-		totalSizeGb)
+			totalSizeGb)
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
 		if err != nil {
 			return nil, err

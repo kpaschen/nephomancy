@@ -149,10 +149,7 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 			disk.Name)
 	}
 	diskCount := disk.Count
-	sizeGb := disk.Template.ActualSizeGb
-	if sizeGb == 0 {
-		sizeGb = uint64(disk.Template.Type.SizeGb)
-	}
+	sizeGb := uint64(disk.Template.Type.SizeGb)
 	priceDisk, err := executePriceQuery(db, "DiskCosts", sla,
 		fmt.Sprintf(` AND DiskType="%s" AND Backup=%d `, dtype, backupInt))
 	if err != nil {
@@ -163,7 +160,7 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 		common.PrintDiskType(*disk.Template.Type),
 		common.PrintLocation(*disk.Template.Location))
 	const hoursPerMonth = 24 * 30
-	expectedHours := hoursPerMonth * disk.PercentUsedAvg / 100
+	expectedHours := disk.UsageHoursPerMonth
 	costs := make([][]string, 1)
 	costs[0] = []string{
 		"Disk",
