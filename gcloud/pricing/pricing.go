@@ -348,8 +348,11 @@ func localDiskCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 	if diskCount == 0 {
 		return nil, nil
 	}
+	var totalSizeGb uint32
+	for _, disk := range vm.Template.LocalStorage {
+		totalSizeGb += disk.Type.SizeGb
+	}
 	// you only pay for local ssd when the instance is running
-	// TODO: check the totals here, they look high.
 	usage := vm.UsageHoursPerMonth
 	costs := make([]string, 0)
 	var maxUsage uint64
@@ -357,8 +360,9 @@ func localDiskCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 	for skuId, price := range pricing {
 		pe := price.PricingExpression
 		fmt.Printf("sku %s pricing: %+v pe: %+v\n", skuId, price, pe)
-		maxUsage = uint64(30 * 24 * vmCount * diskCount)
-		projectedUsage = uint64(usage * vmCount * diskCount)
+		maxUsage = uint64(30 * 24 * vmCount * totalSizeGb)
+		projectedUsage = uint64(usage * vmCount *
+		totalSizeGb)
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
 		if err != nil {
 			return nil, err
@@ -367,11 +371,11 @@ func localDiskCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		costs = []string{
 			fmt.Sprintf("SSD"),
-			fmt.Sprintf("%d disks on each of %d VMs", diskCount, vmCount),
+			fmt.Sprintf("%d GB local storage on each of %d VMs", totalSizeGb, vmCount),
 			spec,
 			fmt.Sprintf("%d GB for a month", maxUsage),
 			fmt.Sprintf("%.2f USD", max),
-			fmt.Sprintf("%d GB for a month", projectedUsage, pe.UsageUnit),
+			fmt.Sprintf("%d GB for a month", projectedUsage),
 			fmt.Sprintf("%.2f USD", exp),
 		}
 	}
@@ -457,7 +461,6 @@ func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 	var maxUsage uint64
 	var projectedUsage uint64
 	costs := make([][]string, 0)
-	// TODO: the memory cost seems high, double check.
 	for skuId, price := range pricing {
 		pe := price.PricingExpression
 		resourceName := ""
