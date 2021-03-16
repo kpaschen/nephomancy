@@ -79,6 +79,74 @@ func (a *SmallAsset) scheduling() (string, error) {
 	return "", nil
 }
 
+// a is assumed to be an instance that has at least a boot disk.
+func (a *SmallAsset) licenses() ([]string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["disks"] == nil {
+		return nil, nil
+	}
+	disks, ok := a.resourceMap["disks"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected disks to be a list of objects but it is a %T",
+			a.resourceMap["disks"])
+	}
+	licenses := make([]string, 0)
+	for _, d := range disks {
+		diskmap, ok := d.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("disk list entry is a %T", d)
+		}
+		ls, ok := diskmap["licenses"].([]interface{})
+		if !ok {
+			continue // non-boot disks may not have a license
+		}
+		for _, l := range ls {
+			lic, _ := l.(string)
+			licenses = append(licenses, lic)
+		}
+	}
+	return licenses, nil
+}
+
+func (a *SmallAsset) localDisks() ([]interface{}, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["disks"] == nil {
+		return nil, nil
+	}
+	disks, ok := a.resourceMap["disks"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected disks to be a list of objects but it is a %T",
+			a.resourceMap["disks"])
+	}
+	ret := make([]interface{}, 0)
+	for _, d := range disks {
+		dk, _ := d.(map[string]interface{})
+		if dk["type"] != "PERSISTENT" {
+			ret = append(ret, dk)
+		}
+	}
+	return ret, nil
+}
+
+func (a *SmallAsset) os() (string, error) {
+	licenses, err := a.licenses()
+	if err != nil {
+		return "", err
+	}
+	for _, license := range licenses {
+		parts := strings.Split(license, "/")
+		if len(parts) > 0 {
+			// ubuntu-1604-xenial
+			return OsFromLicenseName(parts[len(parts)-1]), nil
+		}
+	}
+	return "", fmt.Errorf("no os found")
+}
+
 func (a *SmallAsset) machineType() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
@@ -128,7 +196,14 @@ func (a *SmallAsset) regions() ([]string, error) {
 		return nil, err
 	}
 	regions := make([]string, 0)
-	if a.resourceMap["zone"] != nil {
+	if a.resourceMap["region"] != nil {
+		region, _ := a.resourceMap["region"].(string)
+		path := strings.Split(region, "/")
+		r := path[len(path)-1]
+		regions = append(regions, r)
+		// A regional disk will have 'region' and 'replicaZones' set, but the
+		// replica zones will all be in the same region.
+	} else if a.resourceMap["zone"] != nil {
 		zone, ok := a.resourceMap["zone"].(string)
 		if !ok {
 			return nil, fmt.Errorf("expected zone to be a string but it is a %T", a.resourceMap["zone"])
@@ -140,24 +215,21 @@ func (a *SmallAsset) regions() ([]string, error) {
 		// europe-west1. The other region value is 'global' but there is no zone for that
 		// in the resources afaik.
 		regions = append(regions, z[:len(z)-2])
-	} else {
-		if a.resourceMap["storageLocations"] != nil {
-			loc, ok := a.resourceMap["storageLocations"].([]interface{})
+	} else if a.resourceMap["storageLocations"] != nil {
+		loc, ok := a.resourceMap["storageLocations"].([]interface{})
+		if !ok {
+			fmt.Printf("expected sl to be a string array but it is a %T\n",
+				a.resourceMap["storageLocations"])
+			return nil, nil
+		}
+		for _, l := range loc {
+			r, ok := l.(string)
 			if !ok {
-				fmt.Printf("expected sl to be a string array but it is a %T\n",
-					a.resourceMap["storageLocations"])
+				fmt.Printf("expected l to be a string but it is a %T\n", l)
 				return nil, nil
 			}
-			for _, l := range loc {
-				r, ok := l.(string)
-				if !ok {
-					fmt.Printf("expected l to be a string but it is a %T\n", l)
-					return nil, nil
-				}
-				regions = append(regions, r)
-			}
+			regions = append(regions, r)
 		}
-
 	}
 	return regions, nil
 }

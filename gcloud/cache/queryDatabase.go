@@ -90,6 +90,50 @@ func getBeginningOfSkuQuery(querySku *strings.Builder, service string, resource 
 	}
 }
 
+func GetSkusForLicense(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
+	os := assets.OsChoiceByName(gvm.OsChoice)
+	rg := os.ResourceGroup()
+	if rg == "Unspecified" {
+		return nil, fmt.Errorf("missing os choice")
+	}
+	var querySku strings.Builder
+	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku WHERE Sku.ResourceFamily='License'
+	AND Sku.ResourceGroup='%s' `, rg)
+
+	// Some license skus have 'Google' as their ResourceGroup.
+	if rg == "Google" {
+		if os == assets.RedHatEnterpriseLinuxForSAP {
+			fmt.Fprintf(&querySku, "AND Sku.Description like '%% RHEL 7 with SAP Applications %%' ")
+		} else if os == assets.SUSELinuxEnterpriseServer {
+			fmt.Fprintf(&querySku, "AND Sku.Description like '%% SUSE Linux Enterprise Server %%' ")
+		}
+	} else if os == assets.FedoraCoreOs {
+		fmt.Fprintf(&querySku, "AND Sku.Description like '%% Stable %%' ")
+	} else if os == assets.RedHatEnterpriseLinux {
+		fmt.Printf("TODO: add query based on vcpu count")
+	} else if os == assets.SQLServerOnWindowsServer {
+		fmt.Printf("TODO: add query based on vcpu count")
+	}
+
+	machineType := gvm.MachineType
+	parts := strings.Split(machineType, "-")
+	if parts[0] == "f1" {
+		querySku.WriteString(" AND Sku.Description like '%% on f1-micro' ")
+	} else if parts[0] == "g1" {
+		querySku.WriteString(" AND Sku.Description like '%% on g1-small' ")
+	} else {
+		querySku.WriteString(` AND (Sku.Description like '%% (RAM cost)' OR
+		Sku.Description like '%% (CPU cost)' `)
+		if parts[0] == "a2" {
+			querySku.WriteString(`OR Sku.Description like '%% (GPU cost)'`)
+		}
+		querySku.WriteString(")")
+	}
+	querySku.WriteString(";")
+	fmt.Printf("license query: %s\n", querySku.String())
+	return getSkusForQuery(db, querySku.String())
+}
+
 func GetSkusForInstance(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, ComputeService, "Compute", []string{gvm.Region})
@@ -150,13 +194,15 @@ func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	}
 	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s' ", resourceGroup)
 	// TODO the region query isn't quite right for all disk types.
-	if gd.IsRegional {
-		querySku.WriteString(" AND Sku.GeoTaxonomyType='REGIONAL' ")
-	} else {
+	// afaict both regional and zonal disks have GeoTaxonomyType 'REGIONAL' but
+	// regional disks have 'Regional' in the description.
+	if !gd.IsRegional {
 		querySku.WriteString(" AND Sku.Description not like 'Regional %' ")
 	}
-	// TODO: create other disks and see which SKU they end up with.
-
+	// TODO: what about multi-regional storage? Does multi-regional just mean
+	// the same Sku applies to multiple regions? Normally, multi-regional applies
+	// to object storage (like S3, Firestore, etc), not to disks.
+	// querySku.WriteString(" AND Sku.GeoTaxonomyType<>'MULTI_REGIONAL' ")
 	querySku.WriteString(";")
 	return getSkusForQuery(db, querySku.String())
 }
@@ -164,7 +210,18 @@ func GetSkusForDisk(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 func GetSkusForImage(db *sql.DB, gd assets.GCloudDisk) ([]string, error) {
 	var querySku strings.Builder
 	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gd.Region})
-	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='%s'; ", "StorageImage")
+	querySku.WriteString(" AND Sku.ResourceGroup='StorageImage'; ")
+	return getSkusForQuery(db, querySku.String())
+}
+
+func GetSkusForLocalDisk(db *sql.DB, gvm assets.GCloudVM) ([]string, error) {
+	var querySku strings.Builder
+	getBeginningOfSkuQuery(&querySku, ComputeService, "Storage", []string{gvm.Region})
+	querySku.WriteString(" AND Sku.ResourceGroup='LocalSSD' ")
+	if gvm.Scheduling != "" {
+		fmt.Fprintf(&querySku, " AND Sku.UsageType='%s' ", gvm.Scheduling)
+	}
+	querySku.WriteString(";")
 	return getSkusForQuery(db, querySku.String())
 }
 
@@ -199,26 +256,25 @@ func GetSkusForExternalEgress(db *sql.DB, region string, networkTier string) ([]
 	var querySku strings.Builder
 	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku JOIN ServiceRegions ON Sku.SkuId = ServiceRegions.SkuId 
 	WHERE Sku.ResourceFamily='Network'`)
-	// There are other types of egress ...
+	if region != "" {
+		fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
+	}
+	for idx, area := range getGlobalRegions() {
+		if idx == 0 {
+			querySku.WriteString(" AND (Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		} else {
+			querySku.WriteString(" OR Sku.Description like '% to ")
+			querySku.WriteString(area)
+			querySku.WriteString("'")
+		}
+	}
+	querySku.WriteString(")")
 	if networkTier == "PREMIUM" {
 		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
-		for idx, area := range getGlobalRegions() {
-			if idx == 0 {
-				querySku.WriteString(" AND (Sku.Description like '% to ")
-				querySku.WriteString(area)
-				querySku.WriteString("'")
-			} else {
-				querySku.WriteString(" OR Sku.Description like '% to ")
-				querySku.WriteString(area)
-				querySku.WriteString("'")
-			}
-		}
-		querySku.WriteString(")")
 	} else {
 		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetEgress' ")
-		if region != "" {
-			fmt.Fprintf(&querySku, " AND ServiceRegions.Region='%s'", region)
-		}
 	}
 	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())

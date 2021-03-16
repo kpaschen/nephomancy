@@ -6,6 +6,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	common "nephomancy/common/resources"
+	"strconv"
 	"strings"
 )
 
@@ -329,7 +330,8 @@ func fingerprintVM(instance common.Instance) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&fp, "%s", gvm.MachineType)
+		fmt.Fprintf(&fp, "%s:", gvm.MachineType)
+		fmt.Fprintf(&fp, "%s", gvm.OsChoice)
 	}
 	return fp.String(), nil
 }
@@ -368,6 +370,29 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 			}
 		}
 	}
+	os, err := a.os()
+	if err != nil {
+		return nil, err
+	}
+	localdisks, err := a.localDisks()
+	if err != nil {
+		return nil, err
+	}
+	disks := make([]*common.Disk, len(localdisks))
+	for idx, ld := range localdisks {
+		// Could check here whether the chosen machine type even
+		// supports local ssd.
+		d, _ := ld.(map[string](interface{}))
+		sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
+		disks[idx] = &common.Disk{
+			Type: &common.DiskType{
+				SizeGb: uint32(sizeGb),
+				// Local Disks on Google are always SSD.
+				// They can be attached using NvME or SCSI.
+				DiskTech: "SSD",
+			},
+		}
+	}
 	zone, _ := a.zone()
 	regions, _ := a.regions()
 	region := regions[0]
@@ -380,6 +405,7 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 		NetworkTier: networkTier,
 		Region:      region,
 		Zone:        zone,
+		OsChoice:    os,
 	})
 	if err != nil {
 		return nil, err
@@ -389,6 +415,7 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},
+		LocalStorage: disks,
 	}
 
 	return &ret, nil
