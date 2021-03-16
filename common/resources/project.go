@@ -105,10 +105,9 @@ func makeSampleDiskSet(loc *Location) *DiskSet {
 				SizeGb:   100,
 				DiskTech: "SSD",
 			},
-			ActualSizeGb: 100,
 		},
-		Count:          1,
-		PercentUsedAvg: 70,
+		Count:              1,
+		UsageHoursPerMonth: 720,
 	}
 	return ret
 }

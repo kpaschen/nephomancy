@@ -140,7 +140,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			fmt.Printf("type %s not handled yet\n", bt)
 		}
 	}
-	if err := resolveImagesAndDisks(pip); err != nil {
+	if err := resolveDisks(pip); err != nil {
 		return nil, err
 	}
 	if err := pruneSubnetworks(p); err != nil {
@@ -188,11 +188,10 @@ func vmNetworkTier(instance common.Instance) (string, error) {
 	return gvm.NetworkTier, nil
 }
 
-func resolveImagesAndDisks(pip *ProjectInProgress) error {
+func resolveDisks(pip *ProjectInProgress) error {
 	for diskName, img := range pip.danglingImages {
 		if pip.danglingDisks[diskName] == nil {
-			return fmt.Errorf("missing disk %s for image %+v\n",
-				diskName, img)
+			return fmt.Errorf("missing disk %s for image %+v", diskName, img)
 		}
 		pip.danglingDisks[diskName].Image = img
 	}
@@ -428,7 +427,6 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 	}
 	var fp strings.Builder
 	fmt.Fprintf(&fp, "%s:", region)
-	fmt.Fprintf(&fp, "%d:", disk.ActualSizeGb)
 	if disk.Type != nil {
 		fmt.Fprintf(&fp, "%s:", disk.Type)
 	} else {
@@ -437,10 +435,12 @@ func fingerprintDisk(disk common.Disk) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		fmt.Fprintf(&fp, "%d:", gdsk.ActualSizeGb)
 		fmt.Fprintf(&fp, "%s", gdsk.DiskType)
 	}
 	if disk.Image != nil {
-		fmt.Fprintf(&fp, "img(%s:%d)", disk.Image.Name, disk.Image.SizeGb)
+		fmt.Fprintf(&fp, "img(%s:%d)", disk.Image.Name,
+			disk.Image.SizeGb)
 	}
 	return fp.String(), nil
 }
@@ -459,16 +459,16 @@ func createDisk(a SmallAsset, isRegional bool) (*common.Disk, string, error) {
 	zone, _ := a.zone()
 	diskType, _ := a.diskType()
 	details, err := ptypes.MarshalAny(&GCloudDisk{
-		DiskType:   diskType,
-		IsRegional: isRegional,
-		Region:     regions[0],
-		Zone:       zone,
+		DiskType:     diskType,
+		IsRegional:   isRegional,
+		Region:       regions[0],
+		ActualSizeGb: uint64(sizeGB),
+		Zone:         zone,
 	})
 	if err != nil {
 		return nil, "", err
 	}
 	ret := common.Disk{
-		ActualSizeGb: uint64(sizeGB),
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},

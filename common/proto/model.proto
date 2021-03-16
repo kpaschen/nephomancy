@@ -97,15 +97,9 @@ message InstanceSet {
 message Disk {
   Location location = 1;
   DiskType type = 2; 
-  // the size in the disk type is the maximum size for the disk. The actual
-  // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
-  // TODO: this is not a useful difference for most cloud providers.
-  uint64 actual_size_gb = 3;
-  // For now, a disk can have 0 or 1 image on it.
-  // TODO: which providers have this?
-  Image image = 4;
+  Image image = 3;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 5;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
 // Disks with the same location, type, and actual size
@@ -114,8 +108,8 @@ message DiskSet {
   Disk template = 2;
   uint32 count = 3;
   // Use this to express that the disk only exists for part
-  // of a month (similar to the usage_hours_per_month on InstanceSet).
-  uint32 percent_used_avg = 4;
+  // of a month.
+  uint32 usage_hours_per_month = 4;
 }
 
 // Some providers create default subnetworks for you automatically (gcloud),

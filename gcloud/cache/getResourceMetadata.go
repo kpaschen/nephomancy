@@ -325,8 +325,8 @@ func FillInSpec(db *sql.DB, p *common.Project) error {
 				SizeGb:   uint32(dt.DefaultSizeGb),
 			}
 		}
-		if dset.PercentUsedAvg == 0 {
-			dset.PercentUsedAvg = 100 // full usage
+		if dset.UsageHoursPerMonth == 0 {
+			dset.UsageHoursPerMonth = 30 * 24 // full usage
 		}
 	}
 	for _, nw := range p.Networks {
