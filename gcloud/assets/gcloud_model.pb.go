@@ -204,19 +204,65 @@ func (x *GCloudDisk) GetActualSizeGb() uint64 {
 	return 0
 }
 
+type GCloudNetwork struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Tier string `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`
+}
+
+func (x *GCloudNetwork) Reset() {
+	*x = GCloudNetwork{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_gcloud_model_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GCloudNetwork) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GCloudNetwork) ProtoMessage() {}
+
+func (x *GCloudNetwork) ProtoReflect() protoreflect.Message {
+	mi := &file_gcloud_model_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GCloudNetwork.ProtoReflect.Descriptor instead.
+func (*GCloudNetwork) Descriptor() ([]byte, []int) {
+	return file_gcloud_model_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GCloudNetwork) GetTier() string {
+	if x != nil {
+		return x.Tier
+	}
+	return ""
+}
+
 type GCloudSubnetwork struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Tier   string `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`
-	Region string `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
 }
 
 func (x *GCloudSubnetwork) Reset() {
 	*x = GCloudSubnetwork{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_gcloud_model_proto_msgTypes[2]
+		mi := &file_gcloud_model_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -229,7 +275,7 @@ func (x *GCloudSubnetwork) String() string {
 func (*GCloudSubnetwork) ProtoMessage() {}
 
 func (x *GCloudSubnetwork) ProtoReflect() protoreflect.Message {
-	mi := &file_gcloud_model_proto_msgTypes[2]
+	mi := &file_gcloud_model_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,14 +288,7 @@ func (x *GCloudSubnetwork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GCloudSubnetwork.ProtoReflect.Descriptor instead.
 func (*GCloudSubnetwork) Descriptor() ([]byte, []int) {
-	return file_gcloud_model_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *GCloudSubnetwork) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
+	return file_gcloud_model_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GCloudSubnetwork) GetRegion() string {
@@ -287,12 +326,13 @@ var file_gcloud_model_proto_rawDesc = []byte{
 	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x7a, 0x6f, 0x6e, 0x65, 0x12, 0x24, 0x0a, 0x0e, 0x61, 0x63,
 	0x74, 0x75, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x5f, 0x67, 0x62, 0x18, 0x05, 0x20, 0x01,
 	0x28, 0x04, 0x52, 0x0c, 0x61, 0x63, 0x74, 0x75, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65, 0x47, 0x62,
-	0x22, 0x3e, 0x0a, 0x10, 0x47, 0x43, 0x6c, 0x6f, 0x75, 0x64, 0x53, 0x75, 0x62, 0x6e, 0x65, 0x74,
-	0x77, 0x6f, 0x72, 0x6b, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x69, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x74, 0x69, 0x65, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x67, 0x69,
-	0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x67, 0x69, 0x6f, 0x6e,
-	0x42, 0x0a, 0x5a, 0x08, 0x2e, 0x3b, 0x61, 0x73, 0x73, 0x65, 0x74, 0x73, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x22, 0x23, 0x0a, 0x0d, 0x47, 0x43, 0x6c, 0x6f, 0x75, 0x64, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72,
+	0x6b, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x69, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x04, 0x74, 0x69, 0x65, 0x72, 0x22, 0x2a, 0x0a, 0x10, 0x47, 0x43, 0x6c, 0x6f, 0x75, 0x64, 0x53,
+	0x75, 0x62, 0x6e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x67,
+	0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x67, 0x69, 0x6f,
+	0x6e, 0x42, 0x0a, 0x5a, 0x08, 0x2e, 0x3b, 0x61, 0x73, 0x73, 0x65, 0x74, 0x73, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -307,11 +347,12 @@ func file_gcloud_model_proto_rawDescGZIP() []byte {
 	return file_gcloud_model_proto_rawDescData
 }
 
-var file_gcloud_model_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_gcloud_model_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_gcloud_model_proto_goTypes = []interface{}{
 	(*GCloudVM)(nil),         // 0: model.GCloudVM
 	(*GCloudDisk)(nil),       // 1: model.GCloudDisk
-	(*GCloudSubnetwork)(nil), // 2: model.GCloudSubnetwork
+	(*GCloudNetwork)(nil),    // 2: model.GCloudNetwork
+	(*GCloudSubnetwork)(nil), // 3: model.GCloudSubnetwork
 }
 var file_gcloud_model_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -352,6 +393,18 @@ func file_gcloud_model_proto_init() {
 			}
 		}
 		file_gcloud_model_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GCloudNetwork); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_gcloud_model_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GCloudSubnetwork); i {
 			case 0:
 				return &v.state
@@ -370,7 +423,7 @@ func file_gcloud_model_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_gcloud_model_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

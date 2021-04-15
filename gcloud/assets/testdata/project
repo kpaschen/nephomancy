@@ -1,0 +1,94 @@
+{
+ "name": "binderhub-test-275512",
+ "instanceSets": [
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudVM",
+      "machineType": "n1-standard-2",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "scheduling": "OnDemand",
+      "networkTier": "PREMIUM",
+      "osChoice": "Ubuntu"
+     }
+    }
+   },
+   "count": 1
+  },
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudVM",
+      "machineType": "e2-medium",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "scheduling": "OnDemand",
+      "networkTier": "PREMIUM",
+      "osChoice": "Debian"
+     }
+    }
+   },
+   "count": 1
+  }
+ ],
+ "diskSets": [
+  {
+   "template": {
+    "image": {
+     "name": "binderhub-minikube-image",
+     "sizeGb": 4
+    },
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudDisk",
+      "diskType": "pd-standard",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "actualSizeGb": "100"
+     }
+    }
+   },
+   "count": 1
+  },
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudDisk",
+      "diskType": "pd-balanced",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "actualSizeGb": "10"
+     }
+    }
+   },
+   "count": 1
+  }
+ ],
+ "networks": [
+  {
+   "name": "default",
+   "subnetworks": [
+    {
+     "name": "default",
+     "providerDetails": {
+      "gcloud": {
+       "@type": "type.googleapis.com/model.GCloudSubnetwork",
+       "region": "europe-west1"
+      }
+     }
+    }
+   ],
+   "providerDetails": {
+    "gcloud": {
+     "@type": "type.googleapis.com/model.GCloudNetwork",
+     "tier": "PREMIUM"
+    }
+   }
+  }
+ ]
+}
+

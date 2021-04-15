@@ -71,8 +71,18 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 
 func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	[][]string, error) {
-	ipAddrCount := network.IpAddresses
-	bandwidthMBits := network.BandwidthMbits
+	var ipAddrCount int32
+	var bandwidthMBits uint32
+	// With dcs, assume there is only one subnetwork.
+	// If that assumption is wrong, have to calculate one cidr
+	// per subnetwork.
+	if len(network.Subnetworks) > 1 {
+		return nil, fmt.Errorf("Multiple subnetworks per network is not supported for DCS right now.")
+	}
+	for _, snw := range network.Subnetworks {
+		ipAddrCount += snw.IpAddresses
+		bandwidthMBits += snw.BandwidthMbits
+	}
 	costs := make([][]string, 0)
 	// the max number of IP Addresses is: 2^(32 - Cidr) - 5
 	cidr := uint32(32 - math.Log2(float64(ipAddrCount+5)))
@@ -108,7 +118,8 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 		fmt.Sprintf("%.2f CHF", priceBandwidth*float64(hoursPerMonth)),
 	})
 
-	for _, gw := range network.Gateways {
+	for _, snw := range network.Subnetworks {
+	for _, gw := range snw.Gateways {
 		var dcsGw resources.DcsGateway
 		err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
 		if err != nil {
@@ -133,6 +144,7 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
 		})
 	}
+}
 	return costs, nil
 }
 

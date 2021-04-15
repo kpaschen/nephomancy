@@ -27,6 +27,12 @@ type ProjectInProgress struct {
 	danglingImages map[string]*common.Image
 	// Map long name of disk to disk
 	danglingDisks map[string]*common.Disk
+	// Map network name to list of regions where
+	// subnetworks exist
+	danglingSubnetworks map[string][]string
+	// Map long name of instance to list of ip addresses.
+	// These are addresses attached to an instance.
+	danglingIPs map[string][]string
 }
 
 // BuildProject takes a list of small assets and creates a project proto
@@ -40,15 +46,16 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		project:        p,
 		danglingImages: make(map[string](*common.Image)),
 		danglingDisks:  make(map[string](*common.Disk)),
+		danglingSubnetworks: make(map[string]([]string)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
 		bt, err := as.BaseType()
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
 		switch bt {
 		case "Instance":
@@ -106,6 +113,10 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		case "Route":
 			{
 			}
+		case "Address":
+			{
+				// TODO
+			}
 		case "Network":
 			{
 				nw, err := createNetwork(as)
@@ -118,12 +129,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			}
 		case "Subnetwork":
 			{
-				snw, err := createSubnetwork(as)
-				if err != nil {
-					return nil, err
-				}
-				nwName, _ := as.networkName()
-				if err = addSubnetworkToProject(p, snw, nwName); err != nil {
+				if err = addSubnetworkToProject(pip, as); err != nil {
 					return nil, err
 				}
 			}
@@ -143,7 +149,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 	if err := resolveDisks(pip); err != nil {
 		return nil, err
 	}
-	if err := pruneSubnetworks(p); err != nil {
+	if err := pruneSubnetworks(pip); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -167,13 +173,22 @@ func DiskRegionZone(disk common.Disk) (region string, zone string, err error) {
 	return gdsk.Region, gdsk.Zone, nil
 }
 
-func SubnetworkRegionTier(subnetwork common.Subnetwork) (region string, tier string, err error) {
+func SubnetworkRegion(subnetwork common.Subnetwork) (region string, err error) {
 	var gsnw GCloudSubnetwork
 	if err := ptypes.UnmarshalAny(
 		subnetwork.ProviderDetails[GcloudProvider], &gsnw); err != nil {
-		return "", "", err
+		return "", err
 	}
-	return gsnw.Region, gsnw.Tier, nil
+	return gsnw.Region, nil
+}
+
+func NetworkTier(network common.Network) (tier string, err error) {
+	var gnw GCloudNetwork
+	if err := ptypes.UnmarshalAny(
+		network.ProviderDetails[GcloudProvider], &gnw); err != nil {
+			return "", err
+	}
+	return gnw.Tier, nil
 }
 
 func vmNetworkTier(instance common.Instance) (string, error) {
@@ -217,91 +232,105 @@ func resolveDisks(pip *ProjectInProgress) error {
 	return nil
 }
 
-func pruneSubnetworks(p *common.Project) error {
+func pruneSubnetworks(p *ProjectInProgress) error {
 	regions := make(map[string]string)
-	for _, vms := range p.InstanceSets {
+	for _, vms := range p.project.InstanceSets {
 		region, _, _ := VmRegionZone(*vms.Template)
 		tier, _ := vmNetworkTier(*vms.Template)
+		// This assumes there is only one network. FIXME
 		regions[region] = tier
 	}
-	for _, nw := range p.Networks {
-		pruned := make([]*common.Subnetwork, 0)
-		for _, snw := range nw.Subnetworks {
-			var gsnw GCloudSubnetwork
-			err := ptypes.UnmarshalAny(
-				snw.ProviderDetails[GcloudProvider], &gsnw)
-			if err != nil {
-				return err
-			}
-			if regions[gsnw.Region] != "" {
-				pruned = append(pruned, snw)
-				gsnw.Tier = regions[gsnw.Region]
-				details, _ := ptypes.MarshalAny(&gsnw)
-				snw.ProviderDetails[GcloudProvider] = details
+	for network, snwRegions := range p.danglingSubnetworks {
+		prunedRegions := make([]string, 0)
+		for _, rg := range snwRegions {
+			// Do we even have an instance in this region?
+			if regions[rg] != "" {
+				prunedRegions = append(prunedRegions, rg)
 			}
 		}
-		nw.Subnetworks = pruned
+		pruned := make([]*common.Subnetwork, 0)
+		var nwTier string
+		for _, reg := range prunedRegions {
+			nwTier = regions[reg]
+			details, _ := ptypes.MarshalAny(&GCloudSubnetwork{
+				Region: reg,
+			})
+			snw := &common.Subnetwork{
+				Name: network,
+				IpAddresses: 0,
+				Gateways: make([]*common.Gateway, 0),
+				// Traffic estimate.
+				// Gcloud has a limit of 20Gbits/s per external IP address.
+				IngressGbitsPerMonth: 0,
+				// This is a quota metric: compute.googleapis.com/vm_to_internet_egress_bandwidth
+				// The default value is 75 Gb total per region _per month_.
+				// There is also a cap based on the Instances you are using,
+				// but it is way more than the 75 Gbps per region.
+				ExternalEgressGbitsPerMonth: 0,
+				// There is an internal limit per Instance, depending on the
+				// machine type. It is between 2 and 32 Gbit/s.
+				InternalEgressGbitsPerMonth: 0,
+				ProviderDetails: map[string]*anypb.Any{
+					GcloudProvider: details,
+				},
+			}
+			pruned = append(pruned, snw)
+		}
+		for _, nw := range p.project.Networks {
+			if nw.Name == network {
+				nw.Subnetworks = pruned
+				details, _ := ptypes.MarshalAny(&GCloudNetwork{
+					Tier: nwTier,
+				})
+				nw.ProviderDetails[GcloudProvider] = details
+			}
+		}
 	}
 	return nil
 }
 
-func addSubnetworkToProject(p *common.Project, snw *common.Subnetwork, networkName string) error {
-	for _, nw := range p.Networks {
-		if nw.Name == networkName {
-			nw.Subnetworks = append(nw.Subnetworks, snw)
-			return nil
-		}
-	}
-	nw := &common.Network{
-		Name:        networkName,
-		Subnetworks: make([]*common.Subnetwork, 1),
-	}
-	nw.Subnetworks[0] = snw
-	return addNetworkToProject(p, nw)
-}
-
-func createSubnetwork(a SmallAsset) (*common.Subnetwork, error) {
+// This just records that a subnetwork in a given region should
+// exist, the contents will be created during "pruning".
+func addSubnetworkToProject(p *ProjectInProgress, a SmallAsset) error {
 	if err := a.ensureResourceMap(); err != nil {
-		return nil, err
+		return err
 	}
-	name, _ := a.resourceMap["name"].(string)
 	fullRegion, _ := a.resourceMap["region"].(string)
 	parts := strings.Split(fullRegion, "/")
 	region := parts[len(parts)-1]
-	details, _ := ptypes.MarshalAny(&GCloudSubnetwork{
-		Region: region,
-	})
-	return &common.Subnetwork{
-		Name: name,
-		// Fill in values for traffic estimate.
-		// Gcloud has a limit of 20Gbits/s per external IP address.
-		IngressGbitsPerMonth: 20,
-		// This is a quota metric: compute.googleapis.com/vm_to_internet_egress_bandwidth
-		// The default value is 75 Gb total per region _per month_.
-		// There is also a cap based on the Instances you are using,
-		// but it is way more than the 75 Gbps per region.
-		ExternalEgressGbitsPerMonth: 75,
-		// There is an internal limit per Instance, depending on the
-		// machine type. It is between 2 and 32 Gbit/s.
-		InternalEgressGbitsPerMonth: 100,
+
+	fullName, _ := a.resourceMap["network"].(string)
+	nameParts := strings.Split(fullName, "/")
+	networkName := nameParts[len(nameParts)-1]
+	snwList, ok := p.danglingSubnetworks[networkName]
+	if ok {
+		p.danglingSubnetworks[networkName] = append(snwList, region)
+	} else {
+		p.danglingSubnetworks[networkName] = []string{ region }
+	}
+	return nil
+}
+
+
+func createNetwork(a SmallAsset) (*common.Network, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	parts := strings.Split(a.Name, "/")
+	networkName := parts[len(parts)-1]
+	details, _ := ptypes.MarshalAny(&GCloudNetwork{})
+	return &common.Network{
+		Name: networkName,
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},
 	}, nil
 }
 
-func createNetwork(a SmallAsset) (*common.Network, error) {
-	parts := strings.Split(a.Name, "/")
-	networkName := parts[len(parts)-1]
-	return &common.Network{
-		Name: networkName,
-	}, nil
-}
-
 func addNetworkToProject(p *common.Project, n *common.Network) error {
 	for _, nw := range p.Networks {
 		if nw.Name == n.Name {
-			return nil
+			return fmt.Errorf("duplicate network name %s", n.Name)
 		}
 	}
 	p.Networks = append(p.Networks, n)
@@ -392,6 +421,11 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 			},
 		}
 	}
+	ipAddresses, err := a.ipAddr()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("ip addresses: %v\n", ipAddresses)
 	zone, _ := a.zone()
 	regions, _ := a.regions()
 	region := regions[0]

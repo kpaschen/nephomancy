@@ -29,6 +29,7 @@ message MachineType {
   // local disks and whether it's nvme, scsi, or both.
   // But not all providers have this feature, so maybe better only on
   // specific provider details?
+  // Dito for other features like cpu architecture.
 }
 
 // A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
@@ -62,6 +63,7 @@ message Instance {
   repeated Disk local_storage = 4;
 
   // Probably want something like preemptibility and sole tenancy here as well.
+  // reservations / ondemand need to be in provider details.
 
   // You can have one detail per provider. The common VM is a spec; the provider
   // details should meet the spec.
@@ -88,8 +90,8 @@ message InstanceSet {
   Instance template = 2;
   uint32 count = 3;
   // for cost estimate: how many hours/month do you expect this vm to be running.
-  // When this is not set, cost estimate will be based on running continuously.
-  // AWS use 730 hours/month for "always on"
+  // When this is not set, cost estimate will be based on running continuously,
+  // equivalent to 730 hours/month.
   uint32 usage_hours_per_month = 4;
 }
 
@@ -112,52 +114,52 @@ message DiskSet {
   uint32 usage_hours_per_month = 4;
 }
 
-// Some providers create default subnetworks for you automatically (gcloud),
-// others only explicitly have "subnets" in VPCs (AWS).
-// For this model, a subnetwork exists for every region that has at least one
-// Instance in it. Yes you could have multiple networks and subnetworks in each
-// region, and your Instances could be on one or more of them; but for the purposes
-// of cost estimation, what matters is which regions have ingress-consuming or
-// egress-producing stuff in them. So a Subnetwork is basically a location with
-// a bandwidth usage spec.
-// TODO: maybe merge this into network or instances?
-message Subnetwork {
-  string name = 1;
-  Location location = 2;
-  // for cost estimate: total gbits per month per subnetwork
-  // Note that there are provider-specific caps and quota settings
-  // that may apply and cause your effective bandwidth to be lower.
-  // TODO: decide whether to model total gbits per month or max mbits per
-  // second, or both.
-  uint64 ingress_gbits_per_month = 3;
-  uint64 external_egress_gbits_per_month = 4;
-  uint64 internal_egress_gbits_per_month = 5;
-  // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 6;
-}
-
 // This is any or all of: external load balancer, firewall, nat gateway
 message Gateway {
   map<string, google.protobuf.Any> provider_details = 1;
 }
 
-// Load balancers should probably be listed here. Firewalls too.
-// IP Addresses are usually attached to an Instance, so should be handled there.
 message Network {
   string name = 1;
+
   repeated Subnetwork subnetworks = 2;
-  int32 ip_addresses = 3;
-  repeated Gateway gateways = 4;
-  // internet bandwidth in Mbit/s. If you need this broken down by region,
-  // specify it on the relevant subnetworks instead.
-  // Also note this is your max bandwidth capacity. The gbits_per_month on
-  // the subnetworks are how much you actually transfer.
-  int32 bandwidth_mbits = 5;
 
   // there are types of network (e.g. vpn), but the names and the implications
   // for billing vary by cloud provider.
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 6;
+  map<string, google.protobuf.Any> provider_details = 3;
+}
+
+// A Google project will have a default network and (usually) at least one subnetwork
+// for each region that it uses. If you just go with the defaults, you'll actually
+// get subnetworks created for every public region automatically.
+// On AWS, you have a default VPC in each AWS Region, probably with subnets in
+// several availability zones.
+// On cloud providers that do not have subnets, nephomancy will attach one default
+// subnetwork to each network, in order to hold objects such as ip addresses and gateways.
+message Subnetwork {
+  string name = 1;
+  Location location = 2;
+
+  // These are permanent external ip addresses.
+  int32 ip_addresses = 3;
+  repeated Gateway gateways = 4;
+
+  // internet bandwidth in Mbit/s. If you need this broken down by region,
+  // specify it on the relevant subnetworks instead.
+  // Also note this is your max bandwidth capacity. The gbits_per_month
+  // values on the subnetworks are how much you actually transfer.
+  uint32 bandwidth_mbits = 5;
+
+  // Total per month. This is in gbits for consistency with the mbits
+  // in the bandwidth. This is how much you actually transfer. Note some
+  // providers give their costs and bills in gibibytes / month.
+  // 1 gibibyte = 8 * 1024 / 1000 gbits.
+  uint64 ingress_gbits_per_month = 6;
+  uint64 external_egress_gbits_per_month = 7;
+  uint64 internal_egress_gbits_per_month = 8;
+
+  map<string, google.protobuf.Any> provider_details = 9;
 }
 
 message Project {
@@ -175,5 +177,4 @@ message Project {
   // Other resources not handled yet: Storage (Object storage -- S3 buckets);
   // Services (e.g. Kubernetes, Stackdriver, hosted services.
   // Maybe container services separate from that?
-  // Also licenses, but some are tied to VMs and others to other services.
 }

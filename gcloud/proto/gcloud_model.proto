@@ -34,9 +34,12 @@ message GCloudDisk {
   uint64 actual_size_gb = 5;
 }
 
-message GCloudSubnetwork {
+message GCloudNetwork {
   string tier = 1;
-  string region = 2;
+}
+
+message GCloudSubnetwork {
+  string region = 1;
 }
 
 

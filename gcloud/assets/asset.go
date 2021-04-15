@@ -49,12 +49,15 @@ func (a *SmallAsset) ensureResourceMap() error {
 		rBytes := []byte(a.ResourceAsJson)
 		var rm map[string]interface{}
 		json.Unmarshal(rBytes, &rm)
-		theMap, ok := rm["data"].(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("expected resource[data] to be another map but it is a %T",
-				rm["data"])
+		if rm["data"] != nil {
+			theMap, ok := rm["data"].(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("expected resource[data] to be another map but it is a %T", rm["data"])
+			}
+			a.resourceMap = theMap
+		} else {
+			return fmt.Errorf("asset %+v has nil resource map", a)
 		}
-		a.resourceMap = theMap
 	}
 	return nil
 }
@@ -248,6 +251,40 @@ func (a *SmallAsset) networkName() (string, error) {
 	}
 	parts := strings.Split(nw, "/")
 	return parts[len(parts)-1], nil
+}
+
+func (a *SmallAsset) ipAddr() ([]string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["networkInterfaces"] == nil {
+		return nil, nil
+	}
+	nwif, ok := a.resourceMap["networkInterfaces"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("network interfaces entry was a %T not a list of objects",
+		a.resourceMap["networkInterfaces"])
+	}
+	ret := make([]string, 0)
+	for _, interf := range nwif {
+		nwInterface, _ := interf.(map[string]interface{})
+		accessConfigs, ok := nwInterface["accessConfigs"].([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("access configs entry was a %T not a list of objects",
+			nwInterface["accessConfigs"])
+		}
+		for _, ac := range accessConfigs {
+			config, _ := ac.(map[string](interface{}))
+			tp, _ := config["type"].(string)
+			// Also verify that name == "External NAT"?
+			// I think this type is the only one that signals an actual external IP, but maybe I'm wrong.
+			if tp == "ONE_TO_ONE_NAT" {
+				ipAddr, _ := config["natIP"].(string)
+				ret = append(ret, ipAddr)
+			}
+		}
+	}
+	return ret, nil
 }
 
 func (a *SmallAsset) serviceAccountName() (string, error) {
