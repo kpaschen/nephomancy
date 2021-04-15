@@ -241,18 +241,30 @@ func (a *SmallAsset) networkName() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.resourceMap["network"] == nil {
-		return "None", nil
+	if a.resourceMap["network"] != nil {
+		nw, ok := a.resourceMap["network"].(string)
+		if !ok {
+			return "None", fmt.Errorf("network entry was a %T not a string",
+				a.resourceMap["network"])
+		}
+		parts := strings.Split(nw, "/")
+		return parts[len(parts)-1], nil
+	} else if a.resourceMap["networkInterfaces"] != nil {
+		nwif, _ := a.resourceMap["networkInterfaces"].([]interface{})
+		for _, interf := range nwif {
+			nwInterface, _ := interf.(map[string]interface{})
+			nwname := nwInterface["network"].(string)
+			parts := strings.Split(nwname, "/")
+			return parts[len(parts)-1], nil
+		}
 	}
-	nw, ok := a.resourceMap["network"].(string)
-	if !ok {
-		return "None", fmt.Errorf("network entry was a %T not a string",
-			a.resourceMap["network"])
-	}
-	parts := strings.Split(nw, "/")
-	return parts[len(parts)-1], nil
+	return "None", nil
 }
 
+// This is for ip addresses attached to a VM.
+// If this is a permanent address, there will also be a separate asset entry
+// for it. The list generated here is just for ensuring that ephemeral IP addresses
+// are also counted.
 func (a *SmallAsset) ipAddr() ([]string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return nil, err
@@ -280,7 +292,9 @@ func (a *SmallAsset) ipAddr() ([]string, error) {
 			// I think this type is the only one that signals an actual external IP, but maybe I'm wrong.
 			if tp == "ONE_TO_ONE_NAT" {
 				ipAddr, _ := config["natIP"].(string)
-				ret = append(ret, ipAddr)
+				if ipAddr != "" {
+					ret = append(ret, ipAddr)
+				}
 			}
 		}
 	}

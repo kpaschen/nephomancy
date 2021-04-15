@@ -30,9 +30,8 @@ type ProjectInProgress struct {
 	// Map network name to list of regions where
 	// subnetworks exist
 	danglingSubnetworks map[string][]string
-	// Map long name of instance to list of ip addresses.
-	// These are addresses attached to an instance.
-	danglingIPs map[string][]string
+	// Map ip addresses to their features.
+	danglingIPs map[string]*GCloudIpAddress
 }
 
 // BuildProject takes a list of small assets and creates a project proto
@@ -47,6 +46,7 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		danglingImages: make(map[string](*common.Image)),
 		danglingDisks:  make(map[string](*common.Disk)),
 		danglingSubnetworks: make(map[string]([]string)),
+		danglingIPs: make(map[string](*GCloudIpAddress)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -64,6 +64,9 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 				return nil, err
 			}
 			if err = addVMToProject(p, vm); err != nil {
+				return nil, err
+			}
+			if err = addDanglingAddressesToProject(pip, as); err != nil {
 				return nil, err
 			}
 		case "Disk":
@@ -115,7 +118,10 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 			}
 		case "Address":
 			{
-				// TODO
+				err := createAddress(pip, as)
+				if err != nil {
+					return nil, err
+				}
 			}
 		case "Network":
 			{
@@ -150,6 +156,9 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		return nil, err
 	}
 	if err := pruneSubnetworks(pip); err != nil {
+		return nil, err
+	}
+	if err := resolveAddresses(pip); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -421,11 +430,6 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 			},
 		}
 	}
-	ipAddresses, err := a.ipAddr()
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("ip addresses: %v\n", ipAddresses)
 	zone, _ := a.zone()
 	regions, _ := a.regions()
 	region := regions[0]
@@ -523,5 +527,96 @@ func createImage(a SmallAsset) (*common.Image, error) {
 
 func addImageToProject(p *ProjectInProgress, img *common.Image, sourceDisk string) error {
 	p.danglingImages[sourceDisk] = img
+	return nil
+}
+
+func addDanglingAddressesToProject(p *ProjectInProgress, as SmallAsset) error {
+	ipAddresses, err := as.ipAddr()
+	if err != nil {
+		return err
+	}
+	nw, _ := as.networkName()
+	regions, _ := as.regions()
+        for _, addr := range ipAddresses {
+		if p.danglingIPs[addr] == nil {
+			p.danglingIPs[addr] = &GCloudIpAddress{
+				Type: "EXTERNAL", // ipAddr() only returns external addresses.
+				Network: nw,
+				Region: regions[0],
+				Status: "IN_USE",
+				Purpose: "NAT_AUTO",
+				Ephemeral: true, // This can be changed later.
+			}
+		}
+	}
+	return nil
+}
+
+func createAddress(pip *ProjectInProgress, a SmallAsset) error {
+	var addrType string
+	if a.resourceMap["addressType"] == nil {
+		addrType = "EXTERNAL"
+	} else {
+		addrType, _ = a.resourceMap["addressType"].(string)
+	}
+	var nw string
+	if a.resourceMap["network"] != nil {
+		nw, _ = a.resourceMap["network"].(string)
+	}
+	var purpose string
+	if a.resourceMap["purpose"] != nil {
+		purpose, _ = a.resourceMap["purpose"].(string)
+	}
+	var region string
+	if a.resourceMap["region"] != nil {
+		region, _ = a.resourceMap["region"].(string)
+	}
+	var status string
+	if a.resourceMap["status"] != nil {
+		status, _ = a.resourceMap["status"].(string)
+	}
+	if status == "RESERVING" {
+		status = "RESERVED"  // for the purposes of cost estimation, this is better.
+	}
+	var address string
+	address, _ = a.resourceMap["address"].(string)
+
+	ret := &GCloudIpAddress{
+		Type: addrType,
+		Network: nw,
+		Region: region,
+		Status: status,
+		Purpose: purpose,
+		Ephemeral: false,  // addresses with assets are always static.
+	}
+	pip.danglingIPs[address] = ret  // Just overwrite
+	return nil
+}
+
+func resolveAddresses(pip *ProjectInProgress) error {
+	for addr, obj := range pip.danglingIPs {
+		nw := obj.Network
+		if nw == "" {
+			nw = "default"
+		}
+		found := false
+		for _, network := range pip.project.Networks {
+			if nw == network.Name {
+				var gnw GCloudNetwork
+				if err := ptypes.UnmarshalAny(
+					network.ProviderDetails[GcloudProvider], &gnw); err != nil {
+						return err
+				}
+				gnw.Addresses = append(gnw.Addresses, obj)
+				details, _ := ptypes.MarshalAny(&gnw)
+				network.ProviderDetails[GcloudProvider] = details
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("could not find network %s for address %s", nw, addr)
+		}
+	}
 	return nil
 }

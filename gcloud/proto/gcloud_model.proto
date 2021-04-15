@@ -36,10 +36,19 @@ message GCloudDisk {
 
 message GCloudNetwork {
   string tier = 1;
+  repeated GCloudIpAddress addresses = 2;
 }
 
 message GCloudSubnetwork {
   string region = 1;
 }
 
+message GCloudIpAddress {
+  string type = 1; // EXTERNAL|INTERNAL default is EXTERNAL
+  string network = 2; // only for internal addresses?
+  string region = 3; // only for regional addresses?
+  string purpose = 4; // is this always NAT_AUTO?
+  string status = 5; // IN_USE|RESERVED (this makes a difference for billing)
+  bool ephemeral = 6; // ephemeral IPs do not have their own assets
+}
 
