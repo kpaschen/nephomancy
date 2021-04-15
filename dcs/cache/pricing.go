@@ -214,6 +214,8 @@ func vmCostRange(db *sql.DB, sla string, vm common.InstanceSet, dcsvm resources.
 	if err != nil {
 		return nil, err
 	}
+	// The sample bill in the dcs guide seems to say that License costs in DCS
+	// are per VM, not per CPU or CU.
 	priceOs, err := executePriceQuery(db, "OSCosts", sla, fmt.Sprintf(` AND Vendor="%s"`, lic))
 	if err != nil {
 		return nil, err
