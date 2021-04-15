@@ -118,9 +118,10 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		costs = append(costs, c)
 	}
 	for _, nw := range p.Networks {
+		tier, _ := assets.NetworkTier(*nw)
 		for _, snw := range nw.Subnetworks {
 			ncosts := make([][]string, 2)
-			region, tier, _ := assets.SubnetworkRegionTier(*snw)
+			region, _ := assets.SubnetworkRegion(*snw)
 			if region == "" { // FIXME
 				fmt.Printf("Missing region in subnetwork %s:%s\n",
 					nw.Name, snw.Name)
@@ -236,7 +237,7 @@ func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork, external bool
 	pricing map[string](cache.PricingInfo)) ([]string, error) {
 	var usage uint64
 	resourceName := ""
-	region, _, _ := assets.SubnetworkRegionTier(subnetwork)
+	region, _ := assets.SubnetworkRegion(subnetwork)
 	if external {
 		usage = subnetwork.ExternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("external egress traffic from %s",
