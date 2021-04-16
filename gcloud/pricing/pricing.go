@@ -99,30 +99,41 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			costs = append(costs, icosts)
 		}
 	}
-	// Go over the vms again for networking. There will be one external IP
-	// per Instance (well, per NIC, but ok). These can be ephemeral or
-	// permanent; the code treats them as permanent for now.
-	// This is gcloud-specific. Normally the ip address count is on the
-	// Network proto.
-	// TODO: permanent external IP addresses that are not attached to a VM
-	// will not be counted.
-	for _, vmset := range p.InstanceSets {
-		// This assumes the addresses are all permanent.
-		addrSkus, _ := cache.GetSkusForIpAddress(db, "", false)
-		pi, _ := cache.GetPricingInfo(db, addrSkus)
-		c, err := ipAddrCostRange(db, *vmset, pi)
-		if err != nil {
-			return nil, err
-		}
-		c = append([]string{p.Name, assets.GcloudProvider, vmset.Name}, c...)
-		costs = append(costs, c)
-	}
 	for _, nw := range p.Networks {
 		tier, _ := assets.NetworkTier(*nw)
+		var gnw assets.GCloudNetwork
+		if err := ptypes.UnmarshalAny(nw.ProviderDetails[assets.GcloudProvider], &gnw); err != nil {
+			return nil, err
+		}
+		for _, addr := range gnw.Addresses {
+			if addr.Type != "EXTERNAL" {
+				continue
+			}
+			var region string
+			if addr.Region == "global" {
+				region = ""
+			} else {
+				region = addr.Region
+			}
+			var usageType string
+			if addr.Status == "IN_USE" {
+				usageType = "STANDARD"
+			} else {
+				usageType = ""
+			}
+			addrSkus, _ := cache.GetSkusForIpAddress(db, region, usageType)
+		        pi, _ := cache.GetPricingInfo(db, addrSkus)
+			c, err := ipAddrCostRange(db, region, usageType, pi)
+			if err != nil {
+				return nil, err
+			}
+			c = append([]string{p.Name, assets.GcloudProvider, region}, c...)
+			costs = append(costs, c)
+		}
 		for _, snw := range nw.Subnetworks {
 			ncosts := make([][]string, 2)
 			region, _ := assets.SubnetworkRegion(*snw)
-			if region == "" { // FIXME
+			if region == "" {
 				fmt.Printf("Missing region in subnetwork %s:%s\n",
 					nw.Name, snw.Name)
 				region = "us-central1"
@@ -208,25 +219,28 @@ func getTotalsForRate(
 	return maxTotal, expectedTotal, nil
 }
 
-func ipAddrCostRange(db *sql.DB, vm common.InstanceSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
-	vmCount := vm.Count
-	usage := uint64(vm.UsageHoursPerMonth * vmCount)
-	maxUsage := uint64(30 * 24 * vmCount)
+func ipAddrCostRange(db *sql.DB, region string, usageType string,
+	pricing map[string](cache.PricingInfo)) ([]string, error) {
+	maxUsage := uint64(30 * 24)
 	for _, price := range pricing {
-		max, exp, err := getTotalsForRate(price, maxUsage, usage)
+		max, exp, err := getTotalsForRate(price, maxUsage, maxUsage)
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("attached to VM running %d h in %v", usage,
-			common.PrintLocation(*vm.Template.Location))
+		var spec string
+		if usageType == "RESERVED" {
+			spec = fmt.Sprintf("in %s, not attached to a VM", region)
+		} else {
+			spec = fmt.Sprintf("attached to a %s VM in %s", usageType, region)
+		}
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"IP Address",
-			fmt.Sprintf("%d", vmCount),
+			"1",
 			spec,
 			fmt.Sprintf("%d h", maxUsage),
 			fmt.Sprintf("%.2f USD", max),
-			fmt.Sprintf("%d h", usage),
+			fmt.Sprintf("%d h", maxUsage),
 			fmt.Sprintf("%.2f USD", exp),
 		}, nil
 	}

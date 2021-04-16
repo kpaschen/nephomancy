@@ -266,7 +266,6 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 			})
 			snw := &common.Subnetwork{
 				Name: network,
-				IpAddresses: 0,
 				Gateways: make([]*common.Gateway, 0),
 				// Traffic estimate.
 				// Gcloud has a limit of 20Gbits/s per external IP address.
@@ -290,6 +289,7 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 				nw.Subnetworks = pruned
 				details, _ := ptypes.MarshalAny(&GCloudNetwork{
 					Tier: nwTier,
+					Addresses: make([]*GCloudIpAddress, 0),
 				})
 				nw.ProviderDetails[GcloudProvider] = details
 			}
@@ -330,6 +330,7 @@ func createNetwork(a SmallAsset) (*common.Network, error) {
 	details, _ := ptypes.MarshalAny(&GCloudNetwork{})
 	return &common.Network{
 		Name: networkName,
+		IpAddresses: 0,
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},
@@ -537,12 +538,18 @@ func addDanglingAddressesToProject(p *ProjectInProgress, as SmallAsset) error {
 	}
 	nw, _ := as.networkName()
 	regions, _ := as.regions()
+	var region string
+	if len(regions) > 0 {
+		region = regions[0]
+	} else {
+		region = "global"
+	}
         for _, addr := range ipAddresses {
 		if p.danglingIPs[addr] == nil {
 			p.danglingIPs[addr] = &GCloudIpAddress{
 				Type: "EXTERNAL", // ipAddr() only returns external addresses.
 				Network: nw,
-				Region: regions[0],
+				Region: region,
 				Status: "IN_USE",
 				Purpose: "NAT_AUTO",
 				Ephemeral: true, // This can be changed later.
@@ -570,13 +577,16 @@ func createAddress(pip *ProjectInProgress, a SmallAsset) error {
 	var region string
 	if a.resourceMap["region"] != nil {
 		region, _ = a.resourceMap["region"].(string)
+	} else {
+		region = "global"
 	}
 	var status string
 	if a.resourceMap["status"] != nil {
 		status, _ = a.resourceMap["status"].(string)
 	}
 	if status == "RESERVING" {
-		status = "RESERVED"  // for the purposes of cost estimation, this is better.
+		// cost estimation only cares whether the address is in use or not.
+		status = "RESERVED"
 	}
 	var address string
 	address, _ = a.resourceMap["address"].(string)
@@ -587,7 +597,7 @@ func createAddress(pip *ProjectInProgress, a SmallAsset) error {
 		Region: region,
 		Status: status,
 		Purpose: purpose,
-		Ephemeral: false,  // addresses with assets are always static.
+		Ephemeral: false,
 	}
 	pip.danglingIPs[address] = ret  // Just overwrite
 	return nil
@@ -608,6 +618,7 @@ func resolveAddresses(pip *ProjectInProgress) error {
 						return err
 				}
 				gnw.Addresses = append(gnw.Addresses, obj)
+				network.IpAddresses = network.IpAddresses + 1
 				details, _ := ptypes.MarshalAny(&gnw)
 				network.ProviderDetails[GcloudProvider] = details
 				found = true

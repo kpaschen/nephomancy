@@ -71,7 +71,6 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 
 func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	[][]string, error) {
-	var ipAddrCount int32
 	var bandwidthMBits uint32
 	// With dcs, assume there is only one subnetwork.
 	// If that assumption is wrong, have to calculate one cidr
@@ -80,9 +79,9 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 		return nil, fmt.Errorf("Multiple subnetworks per network is not supported for DCS right now.")
 	}
 	for _, snw := range network.Subnetworks {
-		ipAddrCount += snw.IpAddresses
 		bandwidthMBits += snw.BandwidthMbits
 	}
+	ipAddrCount := network.IpAddresses
 	costs := make([][]string, 0)
 	// the max number of IP Addresses is: 2^(32 - Cidr) - 5
 	cidr := uint32(32 - math.Log2(float64(ipAddrCount+5)))

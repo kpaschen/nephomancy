@@ -91,7 +91,7 @@ func makeSampleInstanceSet(loc *Location) *InstanceSet {
 			Os:       "linux",
 		},
 		Count:              1,
-		UsageHoursPerMonth: 720,
+		UsageHoursPerMonth: 730,
 	}
 	return ret
 }
@@ -107,7 +107,7 @@ func makeSampleDiskSet(loc *Location) *DiskSet {
 			},
 		},
 		Count:              1,
-		UsageHoursPerMonth: 720,
+		UsageHoursPerMonth: 730,
 	}
 	return ret
 }
@@ -116,7 +116,6 @@ func makeSampleNetwork(loc *Location) *Network {
 	snw := &Subnetwork{
 		Name: "default subnetwork",
 		Location: loc,
-		IpAddresses:    1,
 		BandwidthMbits: 150,
 		Gateways:       []*Gateway{&Gateway{}},
 		IngressGbitsPerMonth:        1,
@@ -125,6 +124,7 @@ func makeSampleNetwork(loc *Location) *Network {
 	}
 	ret := &Network{
 		Name:           "default network",
+		IpAddresses:    1,
 		Subnetworks: []*Subnetwork{snw},
 	}
 	return ret

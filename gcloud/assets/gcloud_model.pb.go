@@ -209,7 +209,9 @@ type GCloudNetwork struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Tier      string             `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`
+	Tier string `protobuf:"bytes,1,opt,name=tier,proto3" json:"tier,omitempty"`
+	// External IP addresses aren't usually associated with a gcloud network
+	// asset.
 	Addresses []*GCloudIpAddress `protobuf:"bytes,2,rep,name=addresses,proto3" json:"addresses,omitempty"`
 }
 
@@ -306,15 +308,20 @@ func (x *GCloudSubnetwork) GetRegion() string {
 	return ""
 }
 
+// This proto uses fields that are also on the gcloud address asset, but
+// with two differences:
+// - the network is always set because GloudIpAddress protos are associated
+//   with GCloudNetwork protos
+// - the region will be 'global' for non-regional ip addresses
 type GCloudIpAddress struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Type      string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`            // EXTERNAL|INTERNAL default is EXTERNAL
-	Network   string `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`      // only for internal addresses?
-	Region    string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`        // only for regional addresses?
-	Purpose   string `protobuf:"bytes,4,opt,name=purpose,proto3" json:"purpose,omitempty"`      // is this always NAT_AUTO?
+	Type      string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // EXTERNAL|INTERNAL default is EXTERNAL
+	Network   string `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`
+	Region    string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
+	Purpose   string `protobuf:"bytes,4,opt,name=purpose,proto3" json:"purpose,omitempty"`      // currently defaults to NAT_AUTO?
 	Status    string `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`        // IN_USE|RESERVED (this makes a difference for billing)
 	Ephemeral bool   `protobuf:"varint,6,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"` // ephemeral IPs do not have their own assets
 }
