@@ -42,11 +42,11 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		DiskSets:     make([]*common.DiskSet, 0),
 	}
 	pip := &ProjectInProgress{
-		project:        p,
-		danglingImages: make(map[string](*common.Image)),
-		danglingDisks:  make(map[string](*common.Disk)),
+		project:             p,
+		danglingImages:      make(map[string](*common.Image)),
+		danglingDisks:       make(map[string](*common.Disk)),
 		danglingSubnetworks: make(map[string]([]string)),
-		danglingIPs: make(map[string](*GCloudIpAddress)),
+		danglingIPs:         make(map[string](*GCloudIpAddress)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -195,7 +195,7 @@ func NetworkTier(network common.Network) (tier string, err error) {
 	var gnw GCloudNetwork
 	if err := ptypes.UnmarshalAny(
 		network.ProviderDetails[GcloudProvider], &gnw); err != nil {
-			return "", err
+		return "", err
 	}
 	return gnw.Tier, nil
 }
@@ -265,7 +265,7 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 				Region: reg,
 			})
 			snw := &common.Subnetwork{
-				Name: network,
+				Name:     network,
 				Gateways: make([]*common.Gateway, 0),
 				// Traffic estimate.
 				// Gcloud has a limit of 20Gbits/s per external IP address.
@@ -288,7 +288,7 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 			if nw.Name == network {
 				nw.Subnetworks = pruned
 				details, _ := ptypes.MarshalAny(&GCloudNetwork{
-					Tier: nwTier,
+					Tier:      nwTier,
 					Addresses: make([]*GCloudIpAddress, 0),
 				})
 				nw.ProviderDetails[GcloudProvider] = details
@@ -315,11 +315,10 @@ func addSubnetworkToProject(p *ProjectInProgress, a SmallAsset) error {
 	if ok {
 		p.danglingSubnetworks[networkName] = append(snwList, region)
 	} else {
-		p.danglingSubnetworks[networkName] = []string{ region }
+		p.danglingSubnetworks[networkName] = []string{region}
 	}
 	return nil
 }
-
 
 func createNetwork(a SmallAsset) (*common.Network, error) {
 	if err := a.ensureResourceMap(); err != nil {
@@ -329,7 +328,7 @@ func createNetwork(a SmallAsset) (*common.Network, error) {
 	networkName := parts[len(parts)-1]
 	details, _ := ptypes.MarshalAny(&GCloudNetwork{})
 	return &common.Network{
-		Name: networkName,
+		Name:        networkName,
 		IpAddresses: 0,
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
@@ -544,14 +543,14 @@ func addDanglingAddressesToProject(p *ProjectInProgress, as SmallAsset) error {
 	} else {
 		region = "global"
 	}
-        for _, addr := range ipAddresses {
+	for _, addr := range ipAddresses {
 		if p.danglingIPs[addr] == nil {
 			p.danglingIPs[addr] = &GCloudIpAddress{
-				Type: "EXTERNAL", // ipAddr() only returns external addresses.
-				Network: nw,
-				Region: region,
-				Status: "IN_USE",
-				Purpose: "NAT_AUTO",
+				Type:      "EXTERNAL", // ipAddr() only returns external addresses.
+				Network:   nw,
+				Region:    region,
+				Status:    "IN_USE",
+				Purpose:   "NAT_AUTO",
 				Ephemeral: true, // This can be changed later.
 			}
 		}
@@ -592,14 +591,14 @@ func createAddress(pip *ProjectInProgress, a SmallAsset) error {
 	address, _ = a.resourceMap["address"].(string)
 
 	ret := &GCloudIpAddress{
-		Type: addrType,
-		Network: nw,
-		Region: region,
-		Status: status,
-		Purpose: purpose,
+		Type:      addrType,
+		Network:   nw,
+		Region:    region,
+		Status:    status,
+		Purpose:   purpose,
 		Ephemeral: false,
 	}
-	pip.danglingIPs[address] = ret  // Just overwrite
+	pip.danglingIPs[address] = ret // Just overwrite
 	return nil
 }
 
@@ -615,7 +614,7 @@ func resolveAddresses(pip *ProjectInProgress) error {
 				var gnw GCloudNetwork
 				if err := ptypes.UnmarshalAny(
 					network.ProviderDetails[GcloudProvider], &gnw); err != nil {
-						return err
+					return err
 				}
 				gnw.Addresses = append(gnw.Addresses, obj)
 				network.IpAddresses = network.IpAddresses + 1

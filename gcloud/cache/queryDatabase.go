@@ -232,7 +232,7 @@ func getGlobalRegions() []string {
 }
 
 func GetSkusForIpAddress(db *sql.DB, region string, usageType string) ([]string, error) {
-	// Only external IP addresses have a cost. Cost depends on 
+	// Only external IP addresses have a cost. Cost depends on
 	// the usage type of the vm (preemptible or standard), on whether the ip address
 	// is in use, and on the region. The usage type is empty when the ip address is not
 	// in use.

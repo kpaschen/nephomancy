@@ -122,7 +122,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 				usageType = ""
 			}
 			addrSkus, _ := cache.GetSkusForIpAddress(db, region, usageType)
-		        pi, _ := cache.GetPricingInfo(db, addrSkus)
+			pi, _ := cache.GetPricingInfo(db, addrSkus)
 			c, err := ipAddrCostRange(db, region, usageType, pi)
 			if err != nil {
 				return nil, err

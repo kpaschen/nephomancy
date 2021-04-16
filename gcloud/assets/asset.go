@@ -275,7 +275,7 @@ func (a *SmallAsset) ipAddr() ([]string, error) {
 	nwif, ok := a.resourceMap["networkInterfaces"].([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("network interfaces entry was a %T not a list of objects",
-		a.resourceMap["networkInterfaces"])
+			a.resourceMap["networkInterfaces"])
 	}
 	ret := make([]string, 0)
 	for _, interf := range nwif {
@@ -283,7 +283,7 @@ func (a *SmallAsset) ipAddr() ([]string, error) {
 		accessConfigs, ok := nwInterface["accessConfigs"].([]interface{})
 		if !ok {
 			return nil, fmt.Errorf("access configs entry was a %T not a list of objects",
-			nwInterface["accessConfigs"])
+				nwInterface["accessConfigs"])
 		}
 		for _, ac := range accessConfigs {
 			config, _ := ac.(map[string](interface{}))

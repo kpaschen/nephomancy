@@ -118,32 +118,32 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	})
 
 	for _, snw := range network.Subnetworks {
-	for _, gw := range snw.Gateways {
-		var dcsGw resources.DcsGateway
-		err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
-		if err != nil {
-			return nil, err
+		for _, gw := range snw.Gateways {
+			var dcsGw resources.DcsGateway
+			err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
+			if err != nil {
+				return nil, err
+			}
+			gwType := dcsGw.Type
+			if gwType == "" {
+				gwType = "Eco" // Default, free.
+			}
+			priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
+				fmt.Sprintf(` AND Type="%s" `, gwType))
+			if err != nil {
+				return nil, err
+			}
+			costs = append(costs, []string{
+				"Gateway",
+				"1",
+				fmt.Sprintf("Gateway of type %s", gwType),
+				fmt.Sprintf("for %d h per month", hoursPerMonth),
+				fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
+				fmt.Sprintf("for %d h per month", hoursPerMonth),
+				fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
+			})
 		}
-		gwType := dcsGw.Type
-		if gwType == "" {
-			gwType = "Eco" // Default, free.
-		}
-		priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
-			fmt.Sprintf(` AND Type="%s" `, gwType))
-		if err != nil {
-			return nil, err
-		}
-		costs = append(costs, []string{
-			"Gateway",
-			"1",
-			fmt.Sprintf("Gateway of type %s", gwType),
-			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
-			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
-		})
 	}
-}
 	return costs, nil
 }
 

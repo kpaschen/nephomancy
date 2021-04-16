@@ -1,0 +1,85 @@
+{
+  "name":  "Nephomancy sample project",
+  "instanceSets":  [
+    {
+      "name":  "Sample InstanceSet",
+      "template":  {
+        "location":  {
+          "globalRegion":  "EMEA",
+          "countryCode":  "CH"
+        },
+        "type":  {
+          "cpuCount":  2,
+          "memoryGb":  16
+        },
+        "os":  "linux",
+        "providerDetails":  {
+          "dcs":  {
+            "@type":  "type.googleapis.com/model.DcsVM",
+            "osChoice":  "Red Hat"
+          }
+        }
+      },
+      "count":  1,
+      "usageHoursPerMonth":  730
+    }
+  ],
+  "diskSets":  [
+    {
+      "name":  "Sample Disk Set",
+      "template":  {
+        "location":  {
+          "globalRegion":  "EMEA",
+          "countryCode":  "CH"
+        },
+        "type":  {
+          "sizeGb":  100,
+          "diskTech":  "SSD"
+        },
+        "providerDetails":  {
+          "dcs":  {
+            "@type":  "type.googleapis.com/model.DcsDisk",
+            "diskType":  "UltraFast"
+          }
+        }
+      },
+      "count":  1,
+      "usageHoursPerMonth":  730
+    }
+  ],
+  "networks":  [
+    {
+      "name":  "default network",
+      "ipAddresses":  1,
+      "subnetworks":  [
+        {
+          "name":  "default subnetwork",
+          "location":  {
+            "globalRegion":  "EMEA",
+            "countryCode":  "CH"
+          },
+          "gateways":  [
+            {
+              "providerDetails":  {
+                "dcs":  {
+                  "@type":  "type.googleapis.com/model.DcsGateway",
+                  "type":  "Eco"
+                }
+              }
+            }
+          ],
+          "bandwidthMbits":  150,
+          "ingressGbitsPerMonth":  "1",
+          "externalEgressGbitsPerMonth":  "1",
+          "internalEgressGbitsPerMonth":  "3"
+        }
+      ]
+    }
+  ],
+  "providerDetails":  {
+    "dcs":  {
+      "@type":  "type.googleapis.com/model.DcsProject",
+      "sla":  "Basic"
+    }
+  }
+}

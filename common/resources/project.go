@@ -114,17 +114,17 @@ func makeSampleDiskSet(loc *Location) *DiskSet {
 
 func makeSampleNetwork(loc *Location) *Network {
 	snw := &Subnetwork{
-		Name: "default subnetwork",
-		Location: loc,
-		BandwidthMbits: 150,
-		Gateways:       []*Gateway{&Gateway{}},
+		Name:                        "default subnetwork",
+		Location:                    loc,
+		BandwidthMbits:              150,
+		Gateways:                    []*Gateway{&Gateway{}},
 		IngressGbitsPerMonth:        1,
 		ExternalEgressGbitsPerMonth: 1,
 		InternalEgressGbitsPerMonth: 3,
 	}
 	ret := &Network{
-		Name:           "default network",
-		IpAddresses:    1,
+		Name:        "default network",
+		IpAddresses: 1,
 		Subnetworks: []*Subnetwork{snw},
 	}
 	return ret

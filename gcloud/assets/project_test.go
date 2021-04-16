@@ -34,8 +34,8 @@ func readAssetsFile(filename string) ([]SmallAsset, error) {
 		name, _ := dm["name"].(string)
 		atype, _ := a["discoveryName"].(string)
 		sa := SmallAsset{
-			Name: name,
-			AssetType: "service/" + atype,
+			Name:           name,
+			AssetType:      "service/" + atype,
 			ResourceAsJson: string(line),
 		}
 		rt = append(rt, sa)
@@ -43,7 +43,6 @@ func readAssetsFile(filename string) ([]SmallAsset, error) {
 	}
 	return rt, nil
 }
-
 
 func TestBuildProject(t *testing.T) {
 	assets, err := readAssetsFile("testdata/assets")
@@ -56,9 +55,9 @@ func TestBuildProject(t *testing.T) {
 	}
 	options := protojson.MarshalOptions{
 		Multiline: true,
-		Indent: " ",
+		Indent:    " ",
 	}
-        wanted, err := ioutil.ReadFile("testdata/project")
+	wanted, err := ioutil.ReadFile("testdata/project")
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -70,7 +69,7 @@ func TestBuildProject(t *testing.T) {
 	// should be the same, but formatting both yields the same string.
 	if options.Format(wantedProject) != options.Format(p) {
 		t.Errorf("wanted %s \n but got %s", options.Format(wantedProject),
-		options.Format(p))
+			options.Format(p))
 	}
 
 }

@@ -45,7 +45,7 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 				ResourceAsJson: string(by),
 			}
 			fmt.Println(string(by))
-//			fmt.Printf("asset %s: %+v\n", a.Name, rt[idx])
+			//			fmt.Printf("asset %s: %+v\n", a.Name, rt[idx])
 		}
 		ret = append(ret, rt...)
 		if resp.NextPageToken == "" {

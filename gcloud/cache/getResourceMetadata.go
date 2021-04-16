@@ -171,7 +171,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		if nw.ProviderDetails[assets.GcloudProvider] != nil {
 			if err := ptypes.UnmarshalAny(
 				nw.ProviderDetails[assets.GcloudProvider], &gnw); err != nil {
-					return err
+				return err
 			}
 			log.Printf("network %s already has details\n", nw.Name)
 		} else {
@@ -180,11 +180,11 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			}
 			for i := int32(0); i < nw.IpAddresses; i++ {
 				addr := &assets.GCloudIpAddress{
-					Type: "EXTERNAL",
-					Network: nw.Name,
-					Region: "",
-					Purpose: "NAT_AUTO",
-					Status: "IN_USE",
+					Type:      "EXTERNAL",
+					Network:   nw.Name,
+					Region:    "",
+					Purpose:   "NAT_AUTO",
+					Status:    "IN_USE",
 					Ephemeral: false,
 				}
 				gnw.Addresses = append(gnw.Addresses, addr)
