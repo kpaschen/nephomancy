@@ -233,6 +233,7 @@ func resolveDisks(pip *ProjectInProgress) error {
 		}
 		// No disk set with the given fingerprint yet
 		dset := common.DiskSet{
+			Name: fp,
 			Template: dsk,
 			Count:    1,
 		}
@@ -415,20 +416,25 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	disks := make([]*common.Disk, len(localdisks))
-	for idx, ld := range localdisks {
-		// Could check here whether the chosen machine type even
-		// supports local ssd.
-		d, _ := ld.(map[string](interface{}))
-		sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
-		disks[idx] = &common.Disk{
-			Type: &common.DiskType{
-				SizeGb: uint32(sizeGb),
-				// Local Disks on Google are always SSD.
-				// They can be attached using NvME or SCSI.
-				DiskTech: "SSD",
-			},
+	var disks []*common.Disk
+	if len(localdisks) > 0 {
+		disks := make([]*common.Disk, len(localdisks))
+		for idx, ld := range localdisks {
+			// Could check here whether the chosen machine type even
+			// supports local ssd.
+			d, _ := ld.(map[string](interface{}))
+			sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
+			disks[idx] = &common.Disk{
+				Type: &common.DiskType{
+					SizeGb: uint32(sizeGb),
+					// Local Disks on Google are always SSD.
+					// They can be attached using NvME or SCSI.
+					DiskTech: "SSD",
+				},
+			}
 		}
+	} else {
+		disks = nil
 	}
 	zone, _ := a.zone()
 	regions, _ := a.regions()

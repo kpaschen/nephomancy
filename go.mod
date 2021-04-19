@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	cloud.google.com/go v0.72.0
+	github.com/go-test/deep v1.0.7
 	github.com/golang/protobuf v1.4.3
 	github.com/kennygrant/sanitize v1.2.4
 	github.com/mattn/go-sqlite3 v1.14.6

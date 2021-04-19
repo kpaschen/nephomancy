@@ -51,6 +51,7 @@
      }
     }
    },
+   "name": "europe-west1:100:pd-standardimg(binderhub-minikube-image:4)",
    "count": 1
   },
   {
@@ -65,6 +66,7 @@
      }
     }
    },
+   "name": "europe-west1:10:pd-balanced",
    "count": 1
   }
  ],
@@ -75,6 +77,7 @@
    "subnetworks": [
     {
      "name": "default",
+     "gateways": [],
      "providerDetails": {
       "gcloud": {
        "@type": "type.googleapis.com/model.GCloudSubnetwork",
