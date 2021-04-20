@@ -273,11 +273,8 @@ func GetSkusForExternalEgress(db *sql.DB, region string, networkTier string) ([]
 		}
 	}
 	querySku.WriteString(")")
-	if networkTier == "PREMIUM" {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
-	} else {
-		fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='StandardInternetEgress' ")
-	}
+	// No Skus for StandardInternetEgress?
+	fmt.Fprintf(&querySku, " AND Sku.ResourceGroup='PremiumInternetEgress' ")
 	fmt.Fprintf(&querySku, ";")
 	return getSkusForQuery(db, querySku.String())
 }
