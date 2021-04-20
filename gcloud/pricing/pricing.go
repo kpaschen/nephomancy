@@ -123,7 +123,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			}
 			addrSkus, _ := cache.GetSkusForIpAddress(db, region, usageType)
 			pi, _ := cache.GetPricingInfo(db, addrSkus)
-			c, err := ipAddrCostRange(db, region, usageType, pi)
+			c, err := ipAddrCostRange(db, usageType, pi)
 			if err != nil {
 				return nil, err
 			}
@@ -140,7 +140,6 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			}
 			externalEgressSkus, _ := cache.GetSkusForExternalEgress(
 				db, region, tier)
-			fmt.Printf("skus for external egress: %+v\n", externalEgressSkus)
 			pi, _ := cache.GetPricingInfo(db, externalEgressSkus)
 			c1, err := subnetworkCostRange(db, *snw, true, pi)
 			if err != nil {
@@ -220,8 +219,7 @@ func getTotalsForRate(
 	return maxTotal, expectedTotal, nil
 }
 
-func ipAddrCostRange(db *sql.DB, region string, usageType string,
-	pricing map[string](cache.PricingInfo)) ([]string, error) {
+func ipAddrCostRange(db *sql.DB, usageType string, pricing map[string](cache.PricingInfo)) ([]string, error) {
 	maxUsage := uint64(730)
 	for _, price := range pricing {
 		max, exp, err := getTotalsForRate(price, maxUsage, maxUsage)
@@ -230,9 +228,9 @@ func ipAddrCostRange(db *sql.DB, region string, usageType string,
 		}
 		var spec string
 		if usageType == "RESERVED" {
-			spec = fmt.Sprintf("in %s, not attached to a VM", region)
+			spec = fmt.Sprintf("not attached to a VM")
 		} else {
-			spec = fmt.Sprintf("attached to a %s VM in %s", usageType, region)
+			spec = fmt.Sprintf("attached to a %s VM", usageType)
 		}
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{

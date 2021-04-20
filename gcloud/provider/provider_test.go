@@ -4,10 +4,11 @@ package provider
 
 import (
 	"google.golang.org/protobuf/encoding/protojson"
-	"io/ioutil"
 	"github.com/go-test/deep"
+	"io/ioutil"
 	"nephomancy/common/registry"
 	common "nephomancy/common/resources"
+	"sort"
 	"testing"
 )
 
@@ -53,6 +54,12 @@ func TestFillInProviderDetails(t *testing.T) {
 
 }
 
+type SortableCosts [][]string
+
+func (a SortableCosts) Len() int { return len(a) }
+func (a SortableCosts) Less(i, j int) bool { return a[i][3] + a[i][5] < a[j][3] + a[j][5] }
+func (a SortableCosts) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
 func TestGetCost(t *testing.T) {
         provider, err := registry.GetProvider("gcloud")
         if err != nil {
@@ -74,7 +81,7 @@ func TestGetCost(t *testing.T) {
         if err != nil {
                 t.Errorf("%v", err)
         }
-        wantedCosts := make([][]string, 9)
+        wantedCosts := make([][]string, 8)
 
         wantedCosts[0] = []string{
                 "Nephomancy sample project", "gcloud", "Sample InstanceSet", "VM memory",
@@ -91,38 +98,35 @@ func TestGetCost(t *testing.T) {
         wantedCosts[2] = []string{
                 "Nephomancy sample project", "gcloud", "Sample InstanceSet",
 		"OS license (cpu)", "1", "License for OS Ubuntu",
-                "730 h per month", "0.0 USD", "730 h per month", "0.0 USD",
+                "730 h per month", "0.00 USD", "730 h per month", "0.00 USD",
         }
         wantedCosts[3] = []string{
                 "Nephomancy sample project", "gcloud", "Sample InstanceSet",
-		"OS license (cpu)", "1", "License for OS Ubuntu",
-                "730 h per month", "0.0 USD", "730 h per month", "0.0 USD",
+		"OS license (memory)", "1", "License for OS Ubuntu",
+                "11680 GiBy.h per month", "0.00 USD", "11680 GiBy.h per month", "0.00 USD",
         }
         wantedCosts[4] = []string{
-                "Nephomancy sample project", "gcloud", "Sample InstanceSet",
-		"OS license (memory)", "1", "License for OS Ubuntu",
-                "11680 GiBy.h per month", "0.0 USD", "11680 GiBy.h per month", "0.0 USD",
-        }
-        wantedCosts[5] = []string{
                 "Nephomancy sample project", "gcloud", "Sample Disk Set",
 		"Disk", "1", "100 GB of SSD in CH, EMEA",
-                "100 GiBy/mo", "13.0 USD", "100 GiBy/mo", "13.0 USD",
+                "100 GiBy/mo", "13.00 USD", "100 GiBy/mo", "13.00 USD",
         }
-        wantedCosts[6] = []string{
+        wantedCosts[5] = []string{
                 "Nephomancy sample project", "gcloud", "",
-		"IP Address", "1", "attached to a STANDARD VM in CH, EMEA",
+		"IP Address", "1", "attached to a STANDARD VM",
 		"730 h", "7.30 USD", "730 h", "7.30 USD",
         }
-        wantedCosts[7] = []string{
+        wantedCosts[6] = []string{
                 "Nephomancy sample project", "gcloud", "default subnetwork",
 		"Network", "1", "external egress traffic from europe-west6",
 		"unknown", "unknown", "1 Gb", "0.12 USD",
         }
-        wantedCosts[8] = []string{
+        wantedCosts[7] = []string{
                 "Nephomancy sample project", "gcloud", "default subnetwork",
 		"Network", "1", "internal egress traffic from europe-west6",
 		"unknown", "unknown", "3 Gb", "0.24 USD",
         }
+	sort.Sort(SortableCosts(costs))
+	sort.Sort(SortableCosts(wantedCosts))
         diff := deep.Equal(wantedCosts, costs)
         if diff != nil {
                 t.Errorf("expected costs %+v but got %+v\ndiff: %+v", wantedCosts, costs, diff)
