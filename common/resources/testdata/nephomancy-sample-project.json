@@ -1,0 +1,63 @@
+{
+  "name": "Nephomancy sample project",
+  "instanceSets": [
+    {
+      "name": "Sample InstanceSet",
+      "template": {
+        "location": {
+          "globalRegion": "NAM",
+          "continent": "NorthAmerica",
+          "countryCode": "US"
+        },
+        "type": {
+          "cpuCount": 2,
+          "memoryGb": 16
+        },
+        "os": "linux"
+      },
+      "count": 1,
+      "usageHoursPerMonth": 730
+    }
+  ],
+  "diskSets": [
+    {
+      "name": "Sample Disk Set",
+      "template": {
+        "location": {
+          "globalRegion": "NAM",
+          "continent": "NorthAmerica",
+          "countryCode": "US"
+        },
+        "type": {
+          "sizeGb": 100,
+          "diskTech": "SSD"
+        }
+      },
+      "count": 1,
+      "usageHoursPerMonth": 730
+    }
+  ],
+  "networks": [
+    {
+      "name": "default network",
+      "ipAddresses": 1,
+      "subnetworks": [
+        {
+          "name": "default subnetwork",
+          "location": {
+            "globalRegion": "NAM",
+            "continent": "NorthAmerica",
+            "countryCode": "US"
+          },
+          "gateways": [
+            {}
+          ],
+          "bandwidthMbits": 150,
+          "ingressGbitsPerMonth": "1",
+          "externalEgressGbitsPerMonth": "1",
+          "internalEgressGbitsPerMonth": "3"
+        }
+      ]
+    }
+  ]
+}

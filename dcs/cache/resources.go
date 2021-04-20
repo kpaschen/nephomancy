@@ -135,26 +135,26 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 		}
 	}
 	for _, nw := range p.Networks {
-          for _, snw := range nw.Subnetworks {
-            for _, gw := range snw.Gateways {
-              if gw.ProviderDetails == nil {
-		gw.ProviderDetails = make(map[string](*anypb.Any))
-              }
-              if gw.ProviderDetails[resources.DcsProvider] != nil {
-		var dcsgw resources.DcsGateway
-		err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsgw)
-		if err != nil {
-	          return err
-                }
-		log.Printf("Gateway already has details for provider %s, leaving it as it is.\n", resources.DcsProvider)
-		} else {
-	          details, _ := ptypes.MarshalAny(&resources.DcsGateway{
-			Type: "Eco",
-		  })
-		  gw.ProviderDetails[resources.DcsProvider] = details
+		for _, snw := range nw.Subnetworks {
+			for _, gw := range snw.Gateways {
+				if gw.ProviderDetails == nil {
+					gw.ProviderDetails = make(map[string](*anypb.Any))
+				}
+				if gw.ProviderDetails[resources.DcsProvider] != nil {
+					var dcsgw resources.DcsGateway
+					err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsgw)
+					if err != nil {
+						return err
+					}
+					log.Printf("Gateway already has details for provider %s, leaving it as it is.\n", resources.DcsProvider)
+				} else {
+					details, _ := ptypes.MarshalAny(&resources.DcsGateway{
+						Type: "Eco",
+					})
+					gw.ProviderDetails[resources.DcsProvider] = details
+				}
+			}
 		}
-             }
-	  }
 	}
-        return nil
+	return nil
 }

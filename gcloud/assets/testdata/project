@@ -51,6 +51,7 @@
      }
     }
    },
+   "name": "europe-west1:100:pd-standardimg(binderhub-minikube-image:4)",
    "count": 1
   },
   {
@@ -65,15 +66,18 @@
      }
     }
    },
+   "name": "europe-west1:10:pd-balanced",
    "count": 1
   }
  ],
  "networks": [
   {
    "name": "default",
+   "ipAddresses": 1,
    "subnetworks": [
     {
      "name": "default",
+     "gateways": [],
      "providerDetails": {
       "gcloud": {
        "@type": "type.googleapis.com/model.GCloudSubnetwork",
@@ -87,15 +91,15 @@
      "@type": "type.googleapis.com/model.GCloudNetwork",
      "tier": "PREMIUM",
      "addresses":  [
-              {
-               "type":  "EXTERNAL",
-               "network":  "default",
-               "region":  "europe-west1",
-               "purpose":  "NAT_AUTO",
-               "status":  "IN_USE",
-               "ephemeral":  true
-              }
-         ]
+      {
+       "type":  "EXTERNAL",
+       "network":  "default",
+       "region":  "europe-west1",
+       "purpose":  "NAT_AUTO",
+       "status":  "IN_USE",
+       "ephemeral":  true
+      }
+     ]
     }
    }
   }

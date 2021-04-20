@@ -41,7 +41,11 @@ func checkVmSpec(db *sql.DB, gvm assets.GCloudVM, spec common.Instance) error {
 			return err
 		}
 	}
-	// TODO: also check local disk specs
+	// TODO: also check local disk specs. If spec.LocalStorage is not nil, need to see
+	// whether mt supports local disk.
+	// E2, memory-optimized ultramem, e2 shared-core and n1 shared-core do not support local ssd.
+	// n2, n2d, n1, compute-optimized, memory-optimized megamem, accelerator-optimized high-gpu,
+	// accelerator-optimized mega-gpu support local ssd.
 	return nil
 }
 
@@ -156,11 +160,41 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 			if locations[locstring] == "" {
 				locations[locstring] = r[0]
 			}
-			// TODO: also add local disk provider details.
 			vmset.Template.ProviderDetails[assets.GcloudProvider] = details
 		}
 	}
 	for _, nw := range p.Networks {
+		if nw.ProviderDetails == nil {
+			nw.ProviderDetails = make(map[string](*anypb.Any))
+		}
+		var gnw assets.GCloudNetwork
+		if nw.ProviderDetails[assets.GcloudProvider] != nil {
+			if err := ptypes.UnmarshalAny(
+				nw.ProviderDetails[assets.GcloudProvider], &gnw); err != nil {
+				return err
+			}
+			log.Printf("network %s already has details\n", nw.Name)
+		} else {
+			gnw := &assets.GCloudNetwork{
+				Addresses: make([]*assets.GCloudIpAddress, 0),
+			}
+			for i := int32(0); i < nw.IpAddresses; i++ {
+				addr := &assets.GCloudIpAddress{
+					Type:      "EXTERNAL",
+					Network:   nw.Name,
+					Region:    "",
+					Purpose:   "NAT_AUTO",
+					Status:    "IN_USE",
+					Ephemeral: false,
+				}
+				gnw.Addresses = append(gnw.Addresses, addr)
+			}
+			details, err := ptypes.MarshalAny(gnw)
+			if err != nil {
+				return err
+			}
+			nw.ProviderDetails[assets.GcloudProvider] = details
+		}
 		for _, snw := range nw.Subnetworks {
 			if snw.Location == nil {
 				return fmt.Errorf("missing subnetwork location")

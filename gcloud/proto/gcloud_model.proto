@@ -36,6 +36,8 @@ message GCloudDisk {
 
 message GCloudNetwork {
   string tier = 1;
+  // External IP addresses aren't usually associated with a gcloud network
+  // asset.
   repeated GCloudIpAddress addresses = 2;
 }
 
@@ -43,12 +45,18 @@ message GCloudSubnetwork {
   string region = 1;
 }
 
+// This proto uses fields that are also on the gcloud address asset, but
+// with two differences:
+// - the network is always set because GloudIpAddress protos are associated
+//   with GCloudNetwork protos
+// - the region will be 'global' for non-regional ip addresses
 message GCloudIpAddress {
   string type = 1; // EXTERNAL|INTERNAL default is EXTERNAL
-  string network = 2; // only for internal addresses?
-  string region = 3; // only for regional addresses?
-  string purpose = 4; // is this always NAT_AUTO?
+  string network = 2;
+  string region = 3;
+  string purpose = 4; // currently defaults to NAT_AUTO?
   string status = 5; // IN_USE|RESERVED (this makes a difference for billing)
   bool ephemeral = 6; // ephemeral IPs do not have their own assets
+  // TODO: record whether this is attached to a standard or preemptible vm
 }
 

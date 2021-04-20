@@ -122,12 +122,15 @@ message Gateway {
 message Network {
   string name = 1;
 
-  repeated Subnetwork subnetworks = 2;
+  // These are permanent external ip addresses.
+  int32 ip_addresses = 2;
+
+  repeated Subnetwork subnetworks = 3;
 
   // there are types of network (e.g. vpn), but the names and the implications
   // for billing vary by cloud provider.
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 3;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
 // A Google project will have a default network and (usually) at least one subnetwork
@@ -141,25 +144,23 @@ message Subnetwork {
   string name = 1;
   Location location = 2;
 
-  // These are permanent external ip addresses.
-  int32 ip_addresses = 3;
-  repeated Gateway gateways = 4;
+  repeated Gateway gateways = 3;
 
   // internet bandwidth in Mbit/s. If you need this broken down by region,
   // specify it on the relevant subnetworks instead.
   // Also note this is your max bandwidth capacity. The gbits_per_month
   // values on the subnetworks are how much you actually transfer.
-  uint32 bandwidth_mbits = 5;
+  uint32 bandwidth_mbits = 4;
 
   // Total per month. This is in gbits for consistency with the mbits
   // in the bandwidth. This is how much you actually transfer. Note some
   // providers give their costs and bills in gibibytes / month.
   // 1 gibibyte = 8 * 1024 / 1000 gbits.
-  uint64 ingress_gbits_per_month = 6;
-  uint64 external_egress_gbits_per_month = 7;
-  uint64 internal_egress_gbits_per_month = 8;
+  uint64 ingress_gbits_per_month = 5;
+  uint64 external_egress_gbits_per_month = 6;
+  uint64 internal_egress_gbits_per_month = 7;
 
-  map<string, google.protobuf.Any> provider_details = 9;
+  map<string, google.protobuf.Any> provider_details = 8;
 }
 
 message Project {
@@ -176,5 +177,4 @@ message Project {
 
   // Other resources not handled yet: Storage (Object storage -- S3 buckets);
   // Services (e.g. Kubernetes, Stackdriver, hosted services.
-  // Maybe container services separate from that?
 }

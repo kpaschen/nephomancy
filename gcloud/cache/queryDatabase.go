@@ -231,24 +231,26 @@ func getGlobalRegions() []string {
 	return []string{"APAC", "EMEA", "Americas"}
 }
 
-func GetSkusForIpAddress(db *sql.DB, region string, isStatic bool) ([]string, error) {
-	// IP address skus can be static and single-region, static
-	// and multi-regional, or external. External IP addresses
-	// are charged differently for standard vs. preemptible VMs.
+func GetSkusForIpAddress(db *sql.DB, region string, usageType string) ([]string, error) {
+	// Only external IP addresses have a cost. Cost depends on
+	// the usage type of the vm (preemptible or standard), on whether the ip address
+	// is in use, and on the region. The usage type is empty when the ip address is not
+	// in use.
 	var querySku strings.Builder
 	fmt.Fprintf(&querySku, `SELECT Sku.SkuId FROM Sku WHERE Sku.ResourceFamily='Network' AND Sku.ResourceGroup='IpAddress'`)
-	if isStatic {
+	inUse := usageType == "Standard" || usageType == "Preemptible"
+	if inUse {
+		querySku.WriteString(" AND Sku.GeoTaxonomyType='GLOBAL' ")
+		fmt.Fprintf(&querySku, " AND Sku.Description like '%% %s VM' ", usageType)
+	} else {
 		if region != "" {
 			fmt.Fprintf(&querySku, " AND Sku.Regions='%s' ", region)
 		} else {
 			querySku.WriteString(" AND Sku.GeoTaxonomyType='MULTI_REGIONAL'")
 		}
-	} else {
-		querySku.WriteString(" AND Sku.GeoTaxonomyType='GLOBAL' ")
-		// Not looking at preemptible vs. other VMs yet.
-		querySku.WriteString(" AND Sku.Description like '% Standard VM' ")
 	}
 	fmt.Fprintf(&querySku, ";")
+	fmt.Printf("ip addr sku query: %s\n", querySku.String())
 	return getSkusForQuery(db, querySku.String())
 }
 

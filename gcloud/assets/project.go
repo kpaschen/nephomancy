@@ -42,11 +42,11 @@ func BuildProject(ax []SmallAsset) (*common.Project, error) {
 		DiskSets:     make([]*common.DiskSet, 0),
 	}
 	pip := &ProjectInProgress{
-		project:        p,
-		danglingImages: make(map[string](*common.Image)),
-		danglingDisks:  make(map[string](*common.Disk)),
+		project:             p,
+		danglingImages:      make(map[string](*common.Image)),
+		danglingDisks:       make(map[string](*common.Disk)),
 		danglingSubnetworks: make(map[string]([]string)),
-		danglingIPs: make(map[string](*GCloudIpAddress)),
+		danglingIPs:         make(map[string](*GCloudIpAddress)),
 	}
 	for _, as := range ax {
 		err := as.ensureResourceMap()
@@ -195,7 +195,7 @@ func NetworkTier(network common.Network) (tier string, err error) {
 	var gnw GCloudNetwork
 	if err := ptypes.UnmarshalAny(
 		network.ProviderDetails[GcloudProvider], &gnw); err != nil {
-			return "", err
+		return "", err
 	}
 	return gnw.Tier, nil
 }
@@ -233,6 +233,7 @@ func resolveDisks(pip *ProjectInProgress) error {
 		}
 		// No disk set with the given fingerprint yet
 		dset := common.DiskSet{
+			Name: fp,
 			Template: dsk,
 			Count:    1,
 		}
@@ -265,8 +266,7 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 				Region: reg,
 			})
 			snw := &common.Subnetwork{
-				Name: network,
-				IpAddresses: 0,
+				Name:     network,
 				Gateways: make([]*common.Gateway, 0),
 				// Traffic estimate.
 				// Gcloud has a limit of 20Gbits/s per external IP address.
@@ -289,7 +289,8 @@ func pruneSubnetworks(p *ProjectInProgress) error {
 			if nw.Name == network {
 				nw.Subnetworks = pruned
 				details, _ := ptypes.MarshalAny(&GCloudNetwork{
-					Tier: nwTier,
+					Tier:      nwTier,
+					Addresses: make([]*GCloudIpAddress, 0),
 				})
 				nw.ProviderDetails[GcloudProvider] = details
 			}
@@ -315,11 +316,10 @@ func addSubnetworkToProject(p *ProjectInProgress, a SmallAsset) error {
 	if ok {
 		p.danglingSubnetworks[networkName] = append(snwList, region)
 	} else {
-		p.danglingSubnetworks[networkName] = []string{ region }
+		p.danglingSubnetworks[networkName] = []string{region}
 	}
 	return nil
 }
-
 
 func createNetwork(a SmallAsset) (*common.Network, error) {
 	if err := a.ensureResourceMap(); err != nil {
@@ -329,7 +329,8 @@ func createNetwork(a SmallAsset) (*common.Network, error) {
 	networkName := parts[len(parts)-1]
 	details, _ := ptypes.MarshalAny(&GCloudNetwork{})
 	return &common.Network{
-		Name: networkName,
+		Name:        networkName,
+		IpAddresses: 0,
 		ProviderDetails: map[string]*anypb.Any{
 			GcloudProvider: details,
 		},
@@ -415,20 +416,25 @@ func createVM(a SmallAsset) (*common.Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	disks := make([]*common.Disk, len(localdisks))
-	for idx, ld := range localdisks {
-		// Could check here whether the chosen machine type even
-		// supports local ssd.
-		d, _ := ld.(map[string](interface{}))
-		sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
-		disks[idx] = &common.Disk{
-			Type: &common.DiskType{
-				SizeGb: uint32(sizeGb),
-				// Local Disks on Google are always SSD.
-				// They can be attached using NvME or SCSI.
-				DiskTech: "SSD",
-			},
+	var disks []*common.Disk
+	if len(localdisks) > 0 {
+		disks := make([]*common.Disk, len(localdisks))
+		for idx, ld := range localdisks {
+			// Could check here whether the chosen machine type even
+			// supports local ssd.
+			d, _ := ld.(map[string](interface{}))
+			sizeGb, _ := strconv.Atoi(d["diskSizeGb"].(string))
+			disks[idx] = &common.Disk{
+				Type: &common.DiskType{
+					SizeGb: uint32(sizeGb),
+					// Local Disks on Google are always SSD.
+					// They can be attached using NvME or SCSI.
+					DiskTech: "SSD",
+				},
+			}
 		}
+	} else {
+		disks = nil
 	}
 	zone, _ := a.zone()
 	regions, _ := a.regions()
@@ -537,14 +543,20 @@ func addDanglingAddressesToProject(p *ProjectInProgress, as SmallAsset) error {
 	}
 	nw, _ := as.networkName()
 	regions, _ := as.regions()
-        for _, addr := range ipAddresses {
+	var region string
+	if len(regions) > 0 {
+		region = regions[0]
+	} else {
+		region = "global"
+	}
+	for _, addr := range ipAddresses {
 		if p.danglingIPs[addr] == nil {
 			p.danglingIPs[addr] = &GCloudIpAddress{
-				Type: "EXTERNAL", // ipAddr() only returns external addresses.
-				Network: nw,
-				Region: regions[0],
-				Status: "IN_USE",
-				Purpose: "NAT_AUTO",
+				Type:      "EXTERNAL", // ipAddr() only returns external addresses.
+				Network:   nw,
+				Region:    region,
+				Status:    "IN_USE",
+				Purpose:   "NAT_AUTO",
 				Ephemeral: true, // This can be changed later.
 			}
 		}
@@ -570,26 +582,29 @@ func createAddress(pip *ProjectInProgress, a SmallAsset) error {
 	var region string
 	if a.resourceMap["region"] != nil {
 		region, _ = a.resourceMap["region"].(string)
+	} else {
+		region = "global"
 	}
 	var status string
 	if a.resourceMap["status"] != nil {
 		status, _ = a.resourceMap["status"].(string)
 	}
 	if status == "RESERVING" {
-		status = "RESERVED"  // for the purposes of cost estimation, this is better.
+		// cost estimation only cares whether the address is in use or not.
+		status = "RESERVED"
 	}
 	var address string
 	address, _ = a.resourceMap["address"].(string)
 
 	ret := &GCloudIpAddress{
-		Type: addrType,
-		Network: nw,
-		Region: region,
-		Status: status,
-		Purpose: purpose,
-		Ephemeral: false,  // addresses with assets are always static.
+		Type:      addrType,
+		Network:   nw,
+		Region:    region,
+		Status:    status,
+		Purpose:   purpose,
+		Ephemeral: false,
 	}
-	pip.danglingIPs[address] = ret  // Just overwrite
+	pip.danglingIPs[address] = ret // Just overwrite
 	return nil
 }
 
@@ -605,9 +620,10 @@ func resolveAddresses(pip *ProjectInProgress) error {
 				var gnw GCloudNetwork
 				if err := ptypes.UnmarshalAny(
 					network.ProviderDetails[GcloudProvider], &gnw); err != nil {
-						return err
+					return err
 				}
 				gnw.Addresses = append(gnw.Addresses, obj)
+				network.IpAddresses = network.IpAddresses + 1
 				details, _ := ptypes.MarshalAny(&gnw)
 				network.ProviderDetails[GcloudProvider] = details
 				found = true
