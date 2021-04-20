@@ -9,7 +9,7 @@ package assets
 
 import (
 	"context"
-
+	"fmt"
 	"google.golang.org/api/cloudasset/v1p5beta1"
 )
 
@@ -44,6 +44,8 @@ func ListAssetsForProject(project string) ([]SmallAsset, error) {
 				AssetType:      a.AssetType,
 				ResourceAsJson: string(by),
 			}
+			fmt.Println(string(by))
+			//			fmt.Printf("asset %s: %+v\n", a.Name, rt[idx])
 		}
 		ret = append(ret, rt...)
 		if resp.NextPageToken == "" {

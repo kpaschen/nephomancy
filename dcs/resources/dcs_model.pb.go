@@ -86,6 +86,10 @@ type DcsDisk struct {
 	// DCS disks come in "fast" or "ultra fast". Just based on the numbers
 	// published on their web site, I guess that "fast" is HDD and "ultra fast"
 	// is SDD-based, at least as of Feb 2021.
+	// Technically, I think DCS disks should be treated as 'local' disks because
+	// they are always attached to a VM. However, because this is really the only
+	// volume type you can configure and because they are quite configurable, they
+	// are treated in the disk set message.
 	DiskType   string `protobuf:"bytes,1,opt,name=disk_type,json=diskType,proto3" json:"disk_type,omitempty"`
 	WithBackup bool   `protobuf:"varint,2,opt,name=with_backup,json=withBackup,proto3" json:"with_backup,omitempty"`
 }

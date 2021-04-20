@@ -21,6 +21,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		skus, _ := cache.GetSkusForInstance(db, gvm)
 		pi, err := cache.GetPricingInfo(db, skus)
 		if err != nil {
+			return nil, err
 		}
 		vmcosts, err := vmCostRange(db, *vmset, gvm, pi)
 		if err != nil {
@@ -31,6 +32,37 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 				p.Name, assets.GcloudProvider, vmset.Name}, vc...)
 		}
 		costs = append(costs, vmcosts...)
+
+		skus, _ = cache.GetSkusForLicense(db, gvm)
+		pi, err = cache.GetPricingInfo(db, skus)
+		if err != nil {
+			return nil, err
+		}
+		licenseCosts, err := licenseCost(db, *vmset, gvm, pi)
+		if err != nil {
+			return nil, err
+		}
+		for idx, lc := range licenseCosts {
+			licenseCosts[idx] = append([]string{
+				p.Name, assets.GcloudProvider, vmset.Name},
+				lc...)
+		}
+		costs = append(costs, licenseCosts...)
+
+		if vmset.Template.LocalStorage != nil && len(vmset.Template.LocalStorage) > 0 {
+			skus, _ := cache.GetSkusForLocalDisk(db, gvm)
+			pi, err := cache.GetPricingInfo(db, skus)
+			if err != nil {
+				return nil, err
+			}
+			localDiskCosts, err := localDiskCost(db, *vmset, gvm, pi)
+			if err != nil {
+				return nil, err
+			}
+			localDiskCosts = append([]string{
+				p.Name, assets.GcloudProvider, vmset.Name}, localDiskCosts...)
+			costs = append(costs, localDiskCosts)
+		}
 	}
 	for _, dset := range p.DiskSets {
 		var gdsk assets.GCloudDisk
@@ -43,7 +75,7 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		dcosts, err := diskCostRange(db, *dset, pi)
+		dcosts, err := diskCostRange(db, *dset, gdsk, pi)
 		if err != nil {
 			return nil, err
 		}
@@ -67,29 +99,41 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 			costs = append(costs, icosts)
 		}
 	}
-	// Go over the vms again for networking. There will be one external IP
-	// per Instance (well, per NIC, but ok). These can be ephemeral or
-	// permanent; the code treats them as permanent for now.
-	// This is gcloud-specific. Normally the ip address count is on the
-	// Network proto.
-	// TODO: permanent external IP addresses that are not attached to a VM
-	// will not be counted.
-	for _, vmset := range p.InstanceSets {
-		// This assumes the addresses are all permanent.
-		addrSkus, _ := cache.GetSkusForIpAddress(db, "", false)
-		pi, _ := cache.GetPricingInfo(db, addrSkus)
-		c, err := ipAddrCostRange(db, *vmset, pi)
-		if err != nil {
+	for _, nw := range p.Networks {
+		tier, _ := assets.NetworkTier(*nw)
+		var gnw assets.GCloudNetwork
+		if err := ptypes.UnmarshalAny(nw.ProviderDetails[assets.GcloudProvider], &gnw); err != nil {
 			return nil, err
 		}
-		c = append([]string{p.Name, assets.GcloudProvider, vmset.Name}, c...)
-		costs = append(costs, c)
-	}
-	for _, nw := range p.Networks {
+		for _, addr := range gnw.Addresses {
+			if addr.Type != "EXTERNAL" {
+				continue
+			}
+			var region string
+			if addr.Region == "global" {
+				region = ""
+			} else {
+				region = addr.Region
+			}
+			var usageType string
+			if addr.Status == "IN_USE" {
+				usageType = "STANDARD"
+			} else {
+				usageType = ""
+			}
+			addrSkus, _ := cache.GetSkusForIpAddress(db, region, usageType)
+			pi, _ := cache.GetPricingInfo(db, addrSkus)
+			c, err := ipAddrCostRange(db, usageType, pi)
+			if err != nil {
+				return nil, err
+			}
+			c = append([]string{p.Name, assets.GcloudProvider, region}, c...)
+			costs = append(costs, c)
+		}
 		for _, snw := range nw.Subnetworks {
 			ncosts := make([][]string, 2)
-			region, tier, _ := assets.SubnetworkRegionTier(*snw)
-			if region == "" { // FIXME
+			region, _ := assets.SubnetworkRegion(*snw)
+			if region == "" {
 				fmt.Printf("Missing region in subnetwork %s:%s\n",
 					nw.Name, snw.Name)
 				region = "us-central1"
@@ -175,25 +219,27 @@ func getTotalsForRate(
 	return maxTotal, expectedTotal, nil
 }
 
-func ipAddrCostRange(db *sql.DB, vm common.InstanceSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
-	vmCount := vm.Count
-	usage := uint64(vm.UsageHoursPerMonth * vmCount)
-	maxUsage := uint64(30 * 24 * vmCount)
+func ipAddrCostRange(db *sql.DB, usageType string, pricing map[string](cache.PricingInfo)) ([]string, error) {
+	maxUsage := uint64(730)
 	for _, price := range pricing {
-		max, exp, err := getTotalsForRate(price, maxUsage, usage)
+		max, exp, err := getTotalsForRate(price, maxUsage, maxUsage)
 		if err != nil {
 			return nil, err
 		}
-		spec := fmt.Sprintf("attached to VM running %d h in %v", usage,
-			common.PrintLocation(*vm.Template.Location))
+		var spec string
+		if usageType == "RESERVED" {
+			spec = fmt.Sprintf("not attached to a VM")
+		} else {
+			spec = fmt.Sprintf("attached to a %s VM", usageType)
+		}
 		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
 		return []string{
 			"IP Address",
-			fmt.Sprintf("%d", vmCount),
+			"1",
 			spec,
 			fmt.Sprintf("%d h", maxUsage),
 			fmt.Sprintf("%.2f USD", max),
-			fmt.Sprintf("%d h", usage),
+			fmt.Sprintf("%d h", maxUsage),
 			fmt.Sprintf("%.2f USD", exp),
 		}, nil
 	}
@@ -204,7 +250,7 @@ func subnetworkCostRange(db *sql.DB, subnetwork common.Subnetwork, external bool
 	pricing map[string](cache.PricingInfo)) ([]string, error) {
 	var usage uint64
 	resourceName := ""
-	region, _, _ := assets.SubnetworkRegionTier(subnetwork)
+	region, _ := assets.SubnetworkRegion(subnetwork)
 	if external {
 		usage = subnetwork.ExternalEgressGbitsPerMonth
 		resourceName = fmt.Sprintf("external egress traffic from %s",
@@ -269,18 +315,24 @@ func imageCost(db *sql.DB, image common.Image, pricing map[string](cache.Pricing
 	return nil, fmt.Errorf("no price found for image")
 }
 
-func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.PricingInfo)) ([]string, error) {
+func diskCostRange(db *sql.DB, disk common.DiskSet,
+	gdsk assets.GCloudDisk, pricing map[string](cache.PricingInfo)) ([]string, error) {
 	if len(pricing) != 1 {
 		return nil, fmt.Errorf(
 			"expected exactly one price for disk space but got %d",
 			len(pricing))
 	}
 	diskCount := disk.Count
-	sizeGb := disk.Template.ActualSizeGb
+	var sizeGb uint64
+	if gdsk.ActualSizeGb > 0 {
+		sizeGb = gdsk.ActualSizeGb
+	} else {
+		sizeGb = uint64(disk.Template.Type.SizeGb)
+	}
 	var maxUsage uint64
 	maxUsage = sizeGb * uint64(diskCount)
 	var projectedUsage uint64
-	projectedUsage = uint64(diskCount) * maxUsage * uint64(disk.PercentUsedAvg) / 100
+	projectedUsage = uint64(diskCount) * maxUsage * uint64(disk.UsageHoursPerMonth) / 730
 	for skuId, price := range pricing {
 		_ = skuId
 		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
@@ -304,6 +356,109 @@ func diskCostRange(db *sql.DB, disk common.DiskSet, pricing map[string](cache.Pr
 	}
 	// Should not get here.
 	return nil, fmt.Errorf("no price found for disk")
+}
+
+func localDiskCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
+	pricing map[string](cache.PricingInfo)) ([]string, error) {
+	if vm.Template.LocalStorage == nil {
+		return nil, nil
+	}
+	vmCount := vm.Count
+	diskCount := uint32(len(vm.Template.LocalStorage))
+	if diskCount == 0 {
+		return nil, nil
+	}
+	var totalSizeGb uint32
+	for _, disk := range vm.Template.LocalStorage {
+		totalSizeGb += disk.Type.SizeGb
+	}
+	// you only pay for local ssd when the instance is running
+	usage := vm.UsageHoursPerMonth
+	costs := make([]string, 0)
+	var maxUsage uint64
+	var projectedUsage uint64
+	for skuId, price := range pricing {
+		pe := price.PricingExpression
+		fmt.Printf("sku %s pricing: %+v pe: %+v\n", skuId, price, pe)
+		maxUsage = uint64(730 * vmCount * totalSizeGb)
+		projectedUsage = uint64(usage * vmCount *
+			totalSizeGb)
+		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
+		if err != nil {
+			return nil, err
+		}
+		spec := fmt.Sprintf("Local SSD for VMset %s", vm.Name)
+		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
+		costs = []string{
+			fmt.Sprintf("SSD"),
+			fmt.Sprintf("%d GB local storage on each of %d VMs", totalSizeGb, vmCount),
+			spec,
+			fmt.Sprintf("%d GB for a month", maxUsage),
+			fmt.Sprintf("%.2f USD", max),
+			fmt.Sprintf("%d GB for a month", projectedUsage),
+			fmt.Sprintf("%.2f USD", exp),
+		}
+	}
+	return costs, nil
+}
+
+func licenseCost(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
+	pricing map[string](cache.PricingInfo)) ([][]string, error) {
+	vmCount := vm.Count
+	usage := vm.UsageHoursPerMonth
+	costs := make([][]string, 0)
+	mt, err := cache.GetMachineType(db, gvm.MachineType, gvm.Region)
+	if err != nil {
+		return nil, err
+	}
+	// Some Licenses have different charges depending on number of CPUs,
+	// but that information is needed when selecting the SKU, not here.
+	// cpuCount := mt.CpuCount
+	memoryGbFraction := float64(mt.MemoryMb) / 1024.0
+	_, div := math.Modf(memoryGbFraction)
+	var memoryGb uint32
+	if div >= 0.5 {
+		memoryGb = uint32(math.Ceil(memoryGbFraction))
+	} else {
+		memoryGb = uint32(math.Floor(memoryGbFraction))
+	}
+	var maxUsage uint64
+	var projectedUsage uint64
+	var resourceName string
+	for skuId, price := range pricing {
+		pe := price.PricingExpression
+		fmt.Printf("sku %s pricing: %+v pe: %+v\n", skuId, price, pe)
+		// TODO: handle licenses with a gpu price
+		if pe.UsageUnit == "h" { // cpu or gpu hours
+			maxUsage = uint64(730 * vmCount)
+			projectedUsage = uint64(usage * vmCount)
+			resourceName = "license (cpu)"
+		} else if pe.UsageUnit == "GiBy.h" {
+			// I think the RAM pricing is by GiBy.h, need to double check.
+			maxUsage = uint64(730 * vmCount * memoryGb)
+			projectedUsage = uint64(usage * vmCount * memoryGb)
+			resourceName = "license (memory)"
+		} else {
+			return nil, fmt.Errorf("sku %s has unknown usage unit %s",
+				skuId, pe.UsageUnit)
+		}
+		max, exp, err := getTotalsForRate(price, maxUsage, projectedUsage)
+		if err != nil {
+			return nil, err
+		}
+		spec := fmt.Sprintf("License for OS %s", gvm.OsChoice)
+		// resource type | count | spec | max usage | max cost | exp. usage | exp. cost
+		costs = append(costs, []string{
+			fmt.Sprintf("OS %s", resourceName),
+			fmt.Sprintf("%d", vmCount),
+			spec,
+			fmt.Sprintf("%d %s per month", maxUsage, pe.UsageUnit),
+			fmt.Sprintf("%.2f USD", max),
+			fmt.Sprintf("%d %s per month", projectedUsage, pe.UsageUnit),
+			fmt.Sprintf("%.2f USD", exp),
+		})
+	}
+	return costs, nil
 }
 
 func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
@@ -330,11 +485,11 @@ func vmCostRange(db *sql.DB, vm common.InstanceSet, gvm assets.GCloudVM,
 		pe := price.PricingExpression
 		resourceName := ""
 		if pe.UsageUnit == "h" { // cpu hours
-			maxUsage = uint64(30 * 24 * cpuCount * vmCount)
+			maxUsage = uint64(730 * cpuCount * vmCount)
 			projectedUsage = uint64(usage * cpuCount * vmCount)
 			resourceName = "cpu"
 		} else if pe.UsageUnit == "GiBy.h" {
-			maxUsage = uint64(30 * 24 * memoryGb * vmCount)
+			maxUsage = uint64(730 * memoryGb * vmCount)
 			projectedUsage = uint64(usage * memoryGb * vmCount)
 			resourceName = "memory"
 		} else {

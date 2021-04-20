@@ -49,12 +49,12 @@ func (a *SmallAsset) ensureResourceMap() error {
 		rBytes := []byte(a.ResourceAsJson)
 		var rm map[string]interface{}
 		json.Unmarshal(rBytes, &rm)
-		theMap, ok := rm["data"].(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("expected resource[data] to be another map but it is a %T",
-				rm["data"])
+		if rm["data"] != nil {
+			theMap, _ := rm["data"].(map[string]interface{})
+			a.resourceMap = theMap
+		} else {
+			return fmt.Errorf("asset %+v has nil resource map", a)
 		}
-		a.resourceMap = theMap
 	}
 	return nil
 }
@@ -87,20 +87,13 @@ func (a *SmallAsset) licenses() ([]string, error) {
 	if a.resourceMap["disks"] == nil {
 		return nil, nil
 	}
-	disks, ok := a.resourceMap["disks"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("expected disks to be a list of objects but it is a %T",
-			a.resourceMap["disks"])
-	}
+	disks, _ := a.resourceMap["disks"].([]interface{})
 	licenses := make([]string, 0)
 	for _, d := range disks {
-		diskmap, ok := d.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("disk list entry is a %T", d)
-		}
+		diskmap, _ := d.(map[string]interface{})
 		ls, ok := diskmap["licenses"].([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("licenses are a %T", diskmap["licenses"])
+			continue // non-boot disks need not have a license
 		}
 		for _, l := range ls {
 			lic, _ := l.(string)
@@ -108,6 +101,24 @@ func (a *SmallAsset) licenses() ([]string, error) {
 		}
 	}
 	return licenses, nil
+}
+
+func (a *SmallAsset) localDisks() ([]interface{}, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
+	}
+	if a.resourceMap["disks"] == nil {
+		return nil, nil
+	}
+	disks, _ := a.resourceMap["disks"].([]interface{})
+	ret := make([]interface{}, 0)
+	for _, d := range disks {
+		dk, _ := d.(map[string]interface{})
+		if dk["type"] != "PERSISTENT" {
+			ret = append(ret, dk)
+		}
+	}
+	return ret, nil
 }
 
 func (a *SmallAsset) os() (string, error) {
@@ -118,7 +129,6 @@ func (a *SmallAsset) os() (string, error) {
 	for _, license := range licenses {
 		parts := strings.Split(license, "/")
 		if len(parts) > 0 {
-			// ubuntu-1604-xenial
 			return OsFromLicenseName(parts[len(parts)-1]), nil
 		}
 	}
@@ -132,11 +142,7 @@ func (a *SmallAsset) machineType() (string, error) {
 	if a.resourceMap["machineType"] == nil {
 		return "", nil
 	}
-	machineType, ok := a.resourceMap["machineType"].(string)
-	if !ok {
-		return "", fmt.Errorf("expected machine type to be a string but it is a %T",
-			a.resourceMap["machineType"])
-	}
+	machineType, _ := a.resourceMap["machineType"].(string)
 	path := strings.Split(machineType, "/")
 	return path[len(path)-1], nil
 }
@@ -148,11 +154,7 @@ func (a *SmallAsset) diskType() (string, error) {
 	if a.resourceMap["type"] == nil {
 		return "", nil
 	}
-	diskType, ok := a.resourceMap["type"].(string)
-	if !ok {
-		return "", fmt.Errorf("expected disk type to be a string but it is a %T",
-			a.resourceMap["type"])
-	}
+	diskType, _ := a.resourceMap["type"].(string)
 	path := strings.Split(diskType, "/")
 	return path[len(path)-1], nil
 }
@@ -174,11 +176,15 @@ func (a *SmallAsset) regions() ([]string, error) {
 		return nil, err
 	}
 	regions := make([]string, 0)
-	if a.resourceMap["zone"] != nil {
-		zone, ok := a.resourceMap["zone"].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected zone to be a string but it is a %T", a.resourceMap["zone"])
-		}
+	if a.resourceMap["region"] != nil {
+		region, _ := a.resourceMap["region"].(string)
+		path := strings.Split(region, "/")
+		r := path[len(path)-1]
+		regions = append(regions, r)
+		// A regional disk will have 'region' and 'replicaZones' set, but the
+		// replica zones will all be in the same region.
+	} else if a.resourceMap["zone"] != nil {
+		zone, _ := a.resourceMap["zone"].(string)
 		path := strings.Split(zone, "/")
 		z := path[len(path)-1]
 		// Now z is of the form <continent>-<direction><integer>-<char> like
@@ -186,24 +192,12 @@ func (a *SmallAsset) regions() ([]string, error) {
 		// europe-west1. The other region value is 'global' but there is no zone for that
 		// in the resources afaik.
 		regions = append(regions, z[:len(z)-2])
-	} else {
-		if a.resourceMap["storageLocations"] != nil {
-			loc, ok := a.resourceMap["storageLocations"].([]interface{})
-			if !ok {
-				fmt.Printf("expected sl to be a string array but it is a %T\n",
-					a.resourceMap["storageLocations"])
-				return nil, nil
-			}
-			for _, l := range loc {
-				r, ok := l.(string)
-				if !ok {
-					fmt.Printf("expected l to be a string but it is a %T\n", l)
-					return nil, nil
-				}
-				regions = append(regions, r)
-			}
+	} else if a.resourceMap["storageLocations"] != nil {
+		loc, _ := a.resourceMap["storageLocations"].([]interface{})
+		for _, l := range loc {
+			r, _ := l.(string)
+			regions = append(regions, r)
 		}
-
 	}
 	return regions, nil
 }
@@ -212,16 +206,52 @@ func (a *SmallAsset) networkName() (string, error) {
 	if err := a.ensureResourceMap(); err != nil {
 		return "", err
 	}
-	if a.resourceMap["network"] == nil {
-		return "None", nil
+	if a.resourceMap["network"] != nil {
+		nw, _ := a.resourceMap["network"].(string)
+		parts := strings.Split(nw, "/")
+		return parts[len(parts)-1], nil
+	} else if a.resourceMap["networkInterfaces"] != nil {
+		nwif, _ := a.resourceMap["networkInterfaces"].([]interface{})
+		for _, interf := range nwif {
+			nwInterface, _ := interf.(map[string]interface{})
+			nwname := nwInterface["network"].(string)
+			parts := strings.Split(nwname, "/")
+			return parts[len(parts)-1], nil
+		}
 	}
-	nw, ok := a.resourceMap["network"].(string)
-	if !ok {
-		return "None", fmt.Errorf("network entry was a %T not a string",
-			a.resourceMap["network"])
+	return "None", nil
+}
+
+// This is for ip addresses attached to a VM.
+// If this is a permanent address, there will also be a separate asset entry
+// for it. The list generated here is just for ensuring that ephemeral IP addresses
+// are also counted.
+func (a *SmallAsset) ipAddr() ([]string, error) {
+	if err := a.ensureResourceMap(); err != nil {
+		return nil, err
 	}
-	parts := strings.Split(nw, "/")
-	return parts[len(parts)-1], nil
+	if a.resourceMap["networkInterfaces"] == nil {
+		return nil, nil
+	}
+	nwif, _ := a.resourceMap["networkInterfaces"].([]interface{})
+	ret := make([]string, 0)
+	for _, interf := range nwif {
+		nwInterface, _ := interf.(map[string]interface{})
+		accessConfigs, _ := nwInterface["accessConfigs"].([]interface{})
+		for _, ac := range accessConfigs {
+			config, _ := ac.(map[string](interface{}))
+			tp, _ := config["type"].(string)
+			// Also verify that name == "External NAT"?
+			// I think this type is the only one that signals an actual external IP, but maybe I'm wrong.
+			if tp == "ONE_TO_ONE_NAT" {
+				ipAddr, _ := config["natIP"].(string)
+				if ipAddr != "" {
+					ret = append(ret, ipAddr)
+				}
+			}
+		}
+	}
+	return ret, nil
 }
 
 func (a *SmallAsset) serviceAccountName() (string, error) {
@@ -231,11 +261,7 @@ func (a *SmallAsset) serviceAccountName() (string, error) {
 	if a.resourceMap["name"] == nil {
 		return "None", nil
 	}
-	n, ok := a.resourceMap["name"].(string)
-	if !ok {
-		return "None", fmt.Errorf("name was a %T not a string",
-			a.resourceMap["network"])
-	}
+	n, _ := a.resourceMap["name"].(string)
 	parts := strings.Split(n, "/")
 	// service account names have the form projects/<proj name>/serviceAccounts/<email>
 	// keys look like an account name with "keys/<some uuid>" appended

@@ -16,22 +16,47 @@ message GCloudVM {
 
   string os_choice = 7;
 
-  // boot disk: image (public | custom | snapshot | use existing disk);
-  // for public image: operating system and version
-  // for all boot disks: type (pd, ssd or standard) and size (default is 10GB)
-  // maybe just treat them all as local disks
+  // Not all machine types support local ssd. That restriction
+  // is documented online, but the information is not accessible
+  // via the API (or I haven't found it), so it's not modeled here.
 }
 
 message GCloudDisk {
   string disk_type = 1;
   bool is_regional = 2;
   string region = 3;
-  string zone = 4;  // only for zonal disks
+  string zone = 4;  // only for zonal disks; regional disks have replica zones,
+                    // which are not modeled here because (I think) they are
+                    // irrelevant for cost.
+
+  // Gcloud disk types are max values. You can create a disk
+  // of a given type and give it a smaller size.
+  uint64 actual_size_gb = 5;
+}
+
+message GCloudNetwork {
+  string tier = 1;
+  // External IP addresses aren't usually associated with a gcloud network
+  // asset.
+  repeated GCloudIpAddress addresses = 2;
 }
 
 message GCloudSubnetwork {
-  string tier = 1;
-  string region = 2;
+  string region = 1;
 }
 
+// This proto uses fields that are also on the gcloud address asset, but
+// with two differences:
+// - the network is always set because GloudIpAddress protos are associated
+//   with GCloudNetwork protos
+// - the region will be 'global' for non-regional ip addresses
+message GCloudIpAddress {
+  string type = 1; // EXTERNAL|INTERNAL default is EXTERNAL
+  string network = 2;
+  string region = 3;
+  string purpose = 4; // currently defaults to NAT_AUTO?
+  string status = 5; // IN_USE|RESERVED (this makes a difference for billing)
+  bool ephemeral = 6; // ephemeral IPs do not have their own assets
+  // TODO: record whether this is attached to a standard or preemptible vm
+}
 

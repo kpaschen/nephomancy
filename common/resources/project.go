@@ -16,8 +16,6 @@ func GetProviderNames(p Project) []string {
 			}
 		}
 	}
-	// Should do the same for disks etc
-
 	ret := make([]string, len(providers))
 	idx := 0
 	for p, _ := range providers {
@@ -90,9 +88,10 @@ func makeSampleInstanceSet(loc *Location) *InstanceSet {
 		Template: &Instance{
 			Location: loc,
 			Type:     &mt,
+			Os:       "linux",
 		},
 		Count:              1,
-		UsageHoursPerMonth: 720,
+		UsageHoursPerMonth: 730,
 	}
 	return ret
 }
@@ -106,10 +105,9 @@ func makeSampleDiskSet(loc *Location) *DiskSet {
 				SizeGb:   100,
 				DiskTech: "SSD",
 			},
-			ActualSizeGb: 100,
 		},
-		Count:          1,
-		PercentUsedAvg: 70,
+		Count:              1,
+		UsageHoursPerMonth: 730,
 	}
 	return ret
 }
@@ -118,17 +116,16 @@ func makeSampleNetwork(loc *Location) *Network {
 	snw := &Subnetwork{
 		Name:                        "default subnetwork",
 		Location:                    loc,
+		BandwidthMbits:              150,
+		Gateways:                    []*Gateway{&Gateway{}},
 		IngressGbitsPerMonth:        1,
 		ExternalEgressGbitsPerMonth: 1,
 		InternalEgressGbitsPerMonth: 3,
 	}
-
 	ret := &Network{
-		Name:           "default network",
-		Subnetworks:    []*Subnetwork{snw},
-		IpAddresses:    4,
-		BandwidthMbits: 150,
-		Gateways:       []*Gateway{&Gateway{}},
+		Name:        "default network",
+		IpAddresses: 1,
+		Subnetworks: []*Subnetwork{snw},
 	}
 	return ret
 }

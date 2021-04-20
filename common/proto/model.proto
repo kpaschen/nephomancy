@@ -17,7 +17,6 @@ message Location {
   string global_region = 1; // APAC, EMEA, LATAM, NAM
   string continent = 2; // Asia, Africa, Australia, Europe, NorthAmerica, SouthAmerica
   string country_code = 3;  // ISO 2-letter country code
-  // TODO: esp. for country_code US, may want better subdivision
 }
 
 // MachineType contains specs for a physical or virtual machine (aka an Instance).
@@ -25,8 +24,12 @@ message MachineType {
   uint32 cpu_count = 1;
   uint32 memory_gb = 2;
   uint32 gpu_count = 3;
-  // TODO: local_storage (in GiB)
-  // Probably want something like preemptibility and sole tenancy here as well.
+
+  // could have a field here for whether this machine type supports
+  // local disks and whether it's nvme, scsi, or both.
+  // But not all providers have this feature, so maybe better only on
+  // specific provider details?
+  // Dito for other features like cpu architecture.
 }
 
 // A Volume is a block storage resource. Commonly known as a "Disk" or "Hard drive".
@@ -34,7 +37,6 @@ message MachineType {
 message DiskType {
   uint32 size_gb = 1;
   string disk_tech = 2;  // SSD or Standard
-  // need an enum or a flag for whether this is replicated.
 }
 
 // Custom image or snapshot.
@@ -52,6 +54,16 @@ message Instance {
   // offered, the default choice will be free. Some providers only offer OS choices that
   // come with a license fee.
   string os = 3;
+  // If the provider permits local storage, these are the local disks.
+  // These are separate from the disks contained in DiskSets; the latter are independent
+  // of Instances.
+  // Not all providers support local disks. Even those that do, don't support
+  // them for all choices of machine type. When in doubt, specify your
+  // block storage requirements in a DiskSet rather than here. 
+  repeated Disk local_storage = 4;
+
+  // Probably want something like preemptibility and sole tenancy here as well.
+  // reservations / ondemand need to be in provider details.
 
   // You can have one detail per provider. The common VM is a spec; the provider
   // details should meet the spec.
@@ -66,7 +78,7 @@ message Instance {
   // gcloud's n2 and e2 series), there is a provider-specific ranking of which
   // machine types the system prefers, based on what is considered "generally most
   // cost effective" (but note this is just a heuristic).
-  map<string, google.protobuf.Any> provider_details = 4;
+  map<string, google.protobuf.Any> provider_details = 5;
 }
 
 // An Instance set collects similar instances. All the instances in the set are
@@ -78,8 +90,8 @@ message InstanceSet {
   Instance template = 2;
   uint32 count = 3;
   // for cost estimate: how many hours/month do you expect this vm to be running.
-  // When this is not set, cost estimate will be based on running continuously.
-  // AWS use 730 hours/month for "always on"
+  // When this is not set, cost estimate will be based on running continuously,
+  // equivalent to 730 hours/month.
   uint32 usage_hours_per_month = 4;
 }
 
@@ -87,15 +99,9 @@ message InstanceSet {
 message Disk {
   Location location = 1;
   DiskType type = 2; 
-  // the size in the disk type is the maximum size for the disk. The actual
-  // size here is what you configure when you create it. ActualSizeGb <= type.SizeGb.
-  // TODO: this is not a useful difference for most cloud providers.
-  uint64 actual_size_gb = 3;
-  // For now, a disk can have 0 or 1 image on it.
-  // TODO: which providers have this?
-  Image image = 4;
+  Image image = 3;
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 5;
+  map<string, google.protobuf.Any> provider_details = 4;
 }
 
 // Disks with the same location, type, and actual size
@@ -103,37 +109,9 @@ message DiskSet {
   string name = 1; // Just for display
   Disk template = 2;
   uint32 count = 3;
-  // When this is not set, the cost estimate will be based on full usage.
-  // Some providers (e.g. Google) only charge you for how much of the disk you have
-  // filled up. You can then either set Disk.actual_size_gb to how much you're
-  // using, or you can use the percent_used_avg here to express how full the disk is.
-  // You could, alternatively, use this to express that the disk only exists for part
-  // of a month (similar to the usage_hours_per_month on InstanceSet).
-  uint32 percent_used_avg = 4;
-}
-
-// Some providers create default subnetworks for you automatically (gcloud),
-// others only explicitly have "subnets" in VPCs (AWS).
-// For this model, a subnetwork exists for every region that has at least one
-// Instance in it. Yes you could have multiple networks and subnetworks in each
-// region, and your Instances could be on one or more of them; but for the purposes
-// of cost estimation, what matters is which regions have ingress-consuming or
-// egress-producing stuff in them. So a Subnetwork is basically a location with
-// a bandwidth usage spec.
-// TODO: maybe merge this into network or instances?
-message Subnetwork {
-  string name = 1;
-  Location location = 2;
-  // for cost estimate: total gbits per month per subnetwork
-  // Note that there are provider-specific caps and quota settings
-  // that may apply and cause your effective bandwidth to be lower.
-  // TODO: decide whether to model total gbits per month or max mbits per
-  // second, or both.
-  uint64 ingress_gbits_per_month = 3;
-  uint64 external_egress_gbits_per_month = 4;
-  uint64 internal_egress_gbits_per_month = 5;
-  // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 6;
+  // Use this to express that the disk only exists for part
+  // of a month.
+  uint32 usage_hours_per_month = 4;
 }
 
 // This is any or all of: external load balancer, firewall, nat gateway
@@ -141,23 +119,48 @@ message Gateway {
   map<string, google.protobuf.Any> provider_details = 1;
 }
 
-// Load balancers should probably be listed here. Firewalls too.
-// IP Addresses are usually attached to an Instance, so should be handled there.
 message Network {
   string name = 1;
-  repeated Subnetwork subnetworks = 2;
-  int32 ip_addresses = 3;
-  repeated Gateway gateways = 4;
-  // internet bandwidth in Mbit/s. If you need this broken down by region,
-  // specify it on the relevant subnetworks instead.
-  // Also note this is your max bandwidth capacity. The gbits_per_month on
-  // the subnetworks are how much you actually transfer.
-  int32 bandwidth_mbits = 5;
+
+  // These are permanent external ip addresses.
+  int32 ip_addresses = 2;
+
+  repeated Subnetwork subnetworks = 3;
 
   // there are types of network (e.g. vpn), but the names and the implications
   // for billing vary by cloud provider.
   // You can have one detail per provider.
-  map<string, google.protobuf.Any> provider_details = 6;
+  map<string, google.protobuf.Any> provider_details = 4;
+}
+
+// A Google project will have a default network and (usually) at least one subnetwork
+// for each region that it uses. If you just go with the defaults, you'll actually
+// get subnetworks created for every public region automatically.
+// On AWS, you have a default VPC in each AWS Region, probably with subnets in
+// several availability zones.
+// On cloud providers that do not have subnets, nephomancy will attach one default
+// subnetwork to each network, in order to hold objects such as ip addresses and gateways.
+message Subnetwork {
+  string name = 1;
+  Location location = 2;
+
+  repeated Gateway gateways = 3;
+
+  // internet bandwidth in Mbit/s. If you need this broken down by region,
+  // specify it on the relevant subnetworks instead.
+  // Also note this is your max bandwidth capacity. The gbits_per_month
+  // values on the subnetworks are how much you actually transfer.
+  uint32 bandwidth_mbits = 4;
+
+  // Total per month. This is in gbits for consistency with the mbits
+  // in the bandwidth. This is how much you actually transfer. Note some
+  // providers give their costs and bills in gibibytes / month.
+  // 1 gibibyte = 8 * 1024 / 1000 gbits.
+  uint64 ingress_gbits_per_month = 5;
+  uint64 external_egress_gbits_per_month = 6;
+  uint64 internal_egress_gbits_per_month = 7;
+
+  map<string, google.protobuf.Any> provider_details = 8;
 }
 
 message Project {
@@ -174,6 +177,4 @@ message Project {
 
   // Other resources not handled yet: Storage (Object storage -- S3 buckets);
   // Services (e.g. Kubernetes, Stackdriver, hosted services.
-  // Maybe container services separate from that?
-  // Also licenses, but some are tied to VMs and others to other services.
 }

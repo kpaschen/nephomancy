@@ -91,6 +91,7 @@ func ListMachineTypes(project string, zone string) ([]MachineType, error) {
 		}
 		rt := make([]MachineType, len(resp.Items))
 		for idx, t := range resp.Items {
+			fmt.Printf("item: %+v\n", t)
 			shared := false
 			if t.IsSharedCpu {
 				shared = true

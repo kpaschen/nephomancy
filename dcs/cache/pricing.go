@@ -71,8 +71,17 @@ func GetCost(db *sql.DB, p *common.Project) ([][]string, error) {
 
 func networkCostRange(db *sql.DB, sla string, network common.Network) (
 	[][]string, error) {
+	var bandwidthMBits uint32
+	// With dcs, assume there is only one subnetwork.
+	// If that assumption is wrong, have to calculate one cidr
+	// per subnetwork.
+	if len(network.Subnetworks) > 1 {
+		return nil, fmt.Errorf("Multiple subnetworks per network is not supported for DCS right now.")
+	}
+	for _, snw := range network.Subnetworks {
+		bandwidthMBits += snw.BandwidthMbits
+	}
 	ipAddrCount := network.IpAddresses
-	bandwidthMBits := network.BandwidthMbits
 	costs := make([][]string, 0)
 	// the max number of IP Addresses is: 2^(32 - Cidr) - 5
 	cidr := uint32(32 - math.Log2(float64(ipAddrCount+5)))
@@ -108,30 +117,32 @@ func networkCostRange(db *sql.DB, sla string, network common.Network) (
 		fmt.Sprintf("%.2f CHF", priceBandwidth*float64(hoursPerMonth)),
 	})
 
-	for _, gw := range network.Gateways {
-		var dcsGw resources.DcsGateway
-		err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
-		if err != nil {
-			return nil, err
+	for _, snw := range network.Subnetworks {
+		for _, gw := range snw.Gateways {
+			var dcsGw resources.DcsGateway
+			err := ptypes.UnmarshalAny(gw.ProviderDetails[resources.DcsProvider], &dcsGw)
+			if err != nil {
+				return nil, err
+			}
+			gwType := dcsGw.Type
+			if gwType == "" {
+				gwType = "Eco" // Default, free.
+			}
+			priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
+				fmt.Sprintf(` AND Type="%s" `, gwType))
+			if err != nil {
+				return nil, err
+			}
+			costs = append(costs, []string{
+				"Gateway",
+				"1",
+				fmt.Sprintf("Gateway of type %s", gwType),
+				fmt.Sprintf("for %d h per month", hoursPerMonth),
+				fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
+				fmt.Sprintf("for %d h per month", hoursPerMonth),
+				fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
+			})
 		}
-		gwType := dcsGw.Type
-		if gwType == "" {
-			gwType = "Eco" // Default, free.
-		}
-		priceGateway, err := executePriceQuery(db, "GatewayCosts", sla,
-			fmt.Sprintf(` AND Type="%s" `, gwType))
-		if err != nil {
-			return nil, err
-		}
-		costs = append(costs, []string{
-			"Gateway",
-			"1",
-			fmt.Sprintf("Gateway of type %s", gwType),
-			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
-			fmt.Sprintf("for %d h per month", hoursPerMonth),
-			fmt.Sprintf("%.2f CHF", float64(priceGateway*hoursPerMonth)/math.Pow(10, 9)),
-		})
 	}
 	return costs, nil
 }
@@ -149,10 +160,7 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 			disk.Name)
 	}
 	diskCount := disk.Count
-	sizeGb := disk.Template.ActualSizeGb
-	if sizeGb == 0 {
-		sizeGb = uint64(disk.Template.Type.SizeGb)
-	}
+	sizeGb := uint64(disk.Template.Type.SizeGb)
 	priceDisk, err := executePriceQuery(db, "DiskCosts", sla,
 		fmt.Sprintf(` AND DiskType="%s" AND Backup=%d `, dtype, backupInt))
 	if err != nil {
@@ -163,7 +171,7 @@ func diskCostRange(db *sql.DB, sla string, disk common.DiskSet, dcsDisk resource
 		common.PrintDiskType(*disk.Template.Type),
 		common.PrintLocation(*disk.Template.Location))
 	const hoursPerMonth = 24 * 30
-	expectedHours := hoursPerMonth * disk.PercentUsedAvg / 100
+	expectedHours := disk.UsageHoursPerMonth
 	costs := make([][]string, 1)
 	costs[0] = []string{
 		"Disk",
@@ -205,6 +213,8 @@ func vmCostRange(db *sql.DB, sla string, vm common.InstanceSet, dcsvm resources.
 	if err != nil {
 		return nil, err
 	}
+	// The sample bill in the dcs guide seems to say that License costs in DCS
+	// are per VM, not per CPU or CU.
 	priceOs, err := executePriceQuery(db, "OSCosts", sla, fmt.Sprintf(` AND Vendor="%s"`, lic))
 	if err != nil {
 		return nil, err

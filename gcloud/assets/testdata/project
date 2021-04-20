@@ -1,0 +1,108 @@
+{
+ "name": "binderhub-test-275512",
+ "instanceSets": [
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudVM",
+      "machineType": "n1-standard-2",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "scheduling": "OnDemand",
+      "networkTier": "PREMIUM",
+      "osChoice": "Ubuntu"
+     }
+    }
+   },
+   "count": 1
+  },
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudVM",
+      "machineType": "e2-medium",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "scheduling": "OnDemand",
+      "networkTier": "PREMIUM",
+      "osChoice": "Debian"
+     }
+    }
+   },
+   "count": 1
+  }
+ ],
+ "diskSets": [
+  {
+   "template": {
+    "image": {
+     "name": "binderhub-minikube-image",
+     "sizeGb": 4
+    },
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudDisk",
+      "diskType": "pd-standard",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "actualSizeGb": "100"
+     }
+    }
+   },
+   "name": "europe-west1:100:pd-standardimg(binderhub-minikube-image:4)",
+   "count": 1
+  },
+  {
+   "template": {
+    "providerDetails": {
+     "gcloud": {
+      "@type": "type.googleapis.com/model.GCloudDisk",
+      "diskType": "pd-balanced",
+      "region": "europe-west1",
+      "zone": "europe-west1-b",
+      "actualSizeGb": "10"
+     }
+    }
+   },
+   "name": "europe-west1:10:pd-balanced",
+   "count": 1
+  }
+ ],
+ "networks": [
+  {
+   "name": "default",
+   "ipAddresses": 1,
+   "subnetworks": [
+    {
+     "name": "default",
+     "gateways": [],
+     "providerDetails": {
+      "gcloud": {
+       "@type": "type.googleapis.com/model.GCloudSubnetwork",
+       "region": "europe-west1"
+      }
+     }
+    }
+   ],
+   "providerDetails": {
+    "gcloud": {
+     "@type": "type.googleapis.com/model.GCloudNetwork",
+     "tier": "PREMIUM",
+     "addresses":  [
+      {
+       "type":  "EXTERNAL",
+       "network":  "default",
+       "region":  "europe-west1",
+       "purpose":  "NAT_AUTO",
+       "status":  "IN_USE",
+       "ephemeral":  true
+      }
+     ]
+    }
+   }
+  }
+ ]
+}
+

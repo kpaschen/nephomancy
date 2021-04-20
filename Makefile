@@ -15,18 +15,21 @@ dcs:
 aws:
 	$(MAKE) -C aws/
 
-nephomancy: common gcloud dcs aws
+nephomancy: common gcloud dcs
 	go build
 
 test: nephomancy
 	go test -v -cover nephomancy/...
+
+integration_tests: nephomancy
+	go test -v -cover --tags=integration nephomancy/...
 
 lint: nephomancy | $(GOLINT)
 	go fmt -n ./...
 	$(GOLINT) ./...
 	go vet ./...
 
-.PHONY: common
+.PHONY: common gcloud dcs aws
 
 .DEFAULT_GOAL := nephomancy
 
