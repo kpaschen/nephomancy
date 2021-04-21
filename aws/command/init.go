@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"nephomancy/aws/cache"
+	"nephomancy/aws/ec2"
 	"nephomancy/aws/provider"
 	common "nephomancy/common/command"
 	"nephomancy/common/registry"
@@ -52,8 +53,48 @@ func (c *InitCommand) Run(args []string) int {
 	if err := cache.CreateOrUpdateDatabase(prov.DbHandle); err != nil {
 		log.Fatalf("Failed to create database: %v\n", err)
 	}
+	// This populates the region table based on the default partitions.
 	if err := cache.PopulateDatabase(prov.DbHandle); err != nil {
 		log.Fatalf("Failed to populate database: %v\n", err)
+	}
+
+	// Assume us-east-1 has all instance types that exist.
+	instanceTypes, err := ec2.DescribeInstanceTypes(nil, "us-east-1")
+	if err != nil {
+		log.Fatalf("Could not get instance type descriptions: %v\n", err)
+	}
+	// This should really be done with channels so I don't have to get all the instance types
+	// first and use memory for them.
+	for _, it := range instanceTypes {
+		if err = cache.InsertInstanceType(prov.DbHandle, *it); err != nil {
+			log.Fatalf("insertion of %+v failed: %+v\n", *it, err)
+		}
+	}
+	regions, err := cache.AllRegions(prov.DbHandle)
+	if err != nil {
+		log.Fatalf("failed to get regions: %+v\n", err)
+	}
+	badRegions := map[string]bool {
+		"eu-south-1": true,
+		"af-south-1": true,
+		"ap-east-1": true,
+		"me-south-1": true,
+		"cn-north-1": true,
+		"cn-northwest-1": true,
+	}
+	for _, r := range regions {
+		if badRegions[r] {
+			log.Printf("Not handling %s yet\n", r)
+			continue
+		}
+		log.Printf("region: %s\n", r)
+		itypes, err := ec2.ListInstanceTypesByLocation(r)
+		if err != nil {
+			log.Fatalf("Failed to list instance types for %s: %+v\n", r, err)
+		}
+		if err = cache.InsertInstanceTypesForRegion(prov.DbHandle, itypes, r); err != nil {
+			log.Fatalf("Failed to insert instance types for %s: %+v\n", r, err)
+		}
 	}
 
 	fmt.Println("Populated database.")

@@ -11,6 +11,9 @@ func CreateOrUpdateDatabase(db *sql.DB) error {
 	if err := createInstanceTypesTable(db); err != nil {
 		return err
 	}
+	if err := createValidCoreCountTable(db); err != nil {
+		return err
+	}
 	if err := createVolumeTypesTable(db); err != nil {
 		return err
 	}
@@ -46,26 +49,46 @@ func createRegionsTable(db *sql.DB) error {
 	return nil
 }
 
-// Table for instance types. There are more fields available,
-// but I haven't yet included things like network performance,
-// or the more specialised items like elastic graphcis support.
+// Table for instance types. There are more fields available.
 // The Storage Type can be "EBS", "SSD", "NvMe SSD", or HDD.
 // When the storage type is not "EBS", you can have internal storage
 // of the given type, and StorageAmount tells you how much.
 // Of course you can always use an EBS volume, the storage type "EBS"
 // only tells you EBS is the only block storage you can use with
 // this instance type.
+// CPU is the default number of vCPUs.
+// GPU is just the number of GPU cores you can get.
+// NetworkPerformanceGBit is a bit of guesswork because there is (afaik)
+// no definitive documentation on what "Moderate" etc. mean.
 func createInstanceTypesTable(db *sql.DB) error {
 	createInstanceTypesTableSQL := `CREATE TABLE IF NOT EXISTS InstanceTypes (
 		"InstanceType" TEXT NOT NULL PRIMARY KEY,
-		"InstanceFamily" TEXT,
 		"CPU" INTEGER NOT NULL,
 		"Memory" INTEGER NOT NULL,
 		"GPU" INTEGER,
+		"NetworkPerformance" INTEGER,
 		"StorageType" TEXT,
-		"StorageAmount" INTEGER
+		"StorageAmount" INTEGER,
+		"SupportsSpot" INTEGER,
+		"SupportsOnDemand" INTEGER
 	);`
 	if err := createTable(db, createInstanceTypesTableSQL); err != nil {
+		return err
+	}
+	return nil
+}
+
+func createValidCoreCountTable(db *sql.DB) error {
+	createValidCoreCountTableSQL := `CREATE TABLE IF NOT EXISTS CoreCount (
+		"InstanceType" TEXT NOT NULL,
+		"CoreCount" INTEGER NOT NULL,
+		PRIMARY KEY (InstanceType, CoreCount)
+		FOREIGN KEY (InstanceType)
+		REFERENCES InstanceTypes (InstanceType)
+		ON DELETE CASCADE
+		ON UPDATE NO ACTION
+	);`
+	if err := createTable(db, createValidCoreCountTableSQL); err != nil {
 		return err
 	}
 	return nil

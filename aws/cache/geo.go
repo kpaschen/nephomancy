@@ -127,6 +127,25 @@ func IsWavelengthZone(p string) bool {
 	return p == "Verizon" || p == "SKT" || p == "KDDI"
 }
 
+func AllRegions(db *sql.DB) ([]string, error) {
+	query := `SELECT ID from Regions where Special=0;`
+	res, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Close()
+	var regionId string
+	regions := make([]string, 0)
+	for res.Next() {
+		err = res.Scan(&regionId)
+		if err != nil {
+			return nil, err
+		}
+		regions = append(regions, regionId)
+	}
+	return regions, nil
+}
+
 func RegionsByContinent(db *sql.DB, continent geo.Continent) ([]string, error) {
 	// Retrieve regions from db, then filter out
 	// govcloud, iso and cn clusters.

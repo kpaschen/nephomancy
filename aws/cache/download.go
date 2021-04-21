@@ -56,6 +56,9 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 	fmt.Printf("publication date: %+v has %d products\n", t, len(products))
 	for sku, product := range products {
 		counter++
+		if counter > 10 {
+			break
+		}
 		if counter%1000 == 0 {
 			fmt.Printf("counter: %d\n", counter)
 		}
@@ -67,6 +70,8 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 		if hasAttr {
 			// Not covering "Dedicated Host" for now.
 			if pf == "Compute Instance" || pf == "Compute Instance (bare metal)" {
+				fmt.Printf("sku %s is for an instance with attributes %+v\n",
+				sku, attributes)
 				/*
 					if err := insertInstanceType(db, sku, attributes); err != nil {
 						return err
@@ -77,14 +82,18 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 				*/
 			} else if pf == "Storage" {
 				fmt.Printf("sku %s storage: %v\n", sku, attributes)
+				/*
 				if err := insertVolumeType(db, attributes); err != nil {
 					return err
 				}
+				*/
 
 			} else {
 				fmt.Printf(
 					"sku %s: missing handler for product family %s\n", sku, pf)
 			}
+		} else {
+			fmt.Printf("no attr on %+v\n", p)
 		}
 		// populate pricing tiers
 	}
@@ -222,7 +231,7 @@ func insertInstanceType(db *sql.DB, sku string, attributes map[string]interface{
 	if err != nil {
 		return err
 	}
-	insert := `REPLACE INTO InstanceTypes (InstanceType, InstanceFamily,
+	insert := `INSERT INTO InstanceTypes (InstanceType, InstanceFamily,
 	CPU, Memory, GPU, StorageType, StorageAmount)
 	VALUES (?, ?, ?, ?, ?, ?, ?);`
 	stmt, err := db.Prepare(insert)
@@ -235,7 +244,7 @@ func insertInstanceType(db *sql.DB, sku string, attributes map[string]interface{
 		return err
 	}
 	if region != "" {
-		regionInsert := `REPLACE INTO InstanceTypeByRegion (
+		regionInsert := `INSERT INTO InstanceTypeByRegion (
 			InstanceType, Region) VALUES (?, ?);`
 		stmt, err = db.Prepare(regionInsert)
 		_, err = stmt.Exec(attributes["instanceType"], region)

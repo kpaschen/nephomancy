@@ -26,6 +26,9 @@ func main() {
 		"aws regions": func() (cli.Command, error) {
 			return &awscmds.RegionsCommand{}, nil
 		},
+		"aws list": func() (cli.Command, error) {
+			return &awscmds.ListCommand{}, nil
+		},
 		"dcs init": func() (cli.Command, error) {
 			return &dcscmds.InitCommand{}, nil
 		},
