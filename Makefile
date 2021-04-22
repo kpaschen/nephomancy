@@ -15,7 +15,7 @@ dcs:
 aws:
 	$(MAKE) -C aws/
 
-nephomancy: common gcloud dcs
+nephomancy: common gcloud dcs aws
 	go build
 
 test: nephomancy
