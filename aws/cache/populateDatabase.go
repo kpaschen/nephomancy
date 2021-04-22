@@ -67,7 +67,7 @@ func InsertInstanceType(db *sql.DB, itype resources.InstanceType) error {
 	}
 	var instanceStorage string
 	if itype.InstanceStorageSupported {
-		instanceStorage = "yes"
+		instanceStorage = itype.InstanceStorageType
 	} else {
 		instanceStorage = "ebs"
 	}

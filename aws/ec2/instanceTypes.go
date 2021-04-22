@@ -151,8 +151,10 @@ func MakeDto(typeInfo ec2.InstanceTypeInfo) (*resources.InstanceType, error) {
 		}
 	}
 	var instanceStorage uint64 = 0
+	var instanceStorageType string
 	if *typeInfo.InstanceStorageSupported && typeInfo.InstanceStorageInfo != nil {
 		instanceStorage = uint64(*typeInfo.InstanceStorageInfo.TotalSizeInGB)
+		instanceStorageType = *typeInfo.InstanceStorageInfo.Disks[0].Type
 	}
 
         return &resources.InstanceType{
@@ -164,6 +166,7 @@ func MakeDto(typeInfo ec2.InstanceTypeInfo) (*resources.InstanceType, error) {
 		ValidCores: validCores,
 		InstanceStorageSupported: *typeInfo.InstanceStorageSupported,
 		InstanceStorageMaxSizeGb: instanceStorage,
+		InstanceStorageType: instanceStorageType,
 		GpuCount: gpuCount,
         }, nil
 }

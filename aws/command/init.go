@@ -70,24 +70,11 @@ func (c *InitCommand) Run(args []string) int {
 			log.Fatalf("insertion of %+v failed: %+v\n", *it, err)
 		}
 	}
-	regions, err := cache.AllRegions(prov.DbHandle)
+	regions, err := cache.AllRegions(prov.DbHandle, true)
 	if err != nil {
 		log.Fatalf("failed to get regions: %+v\n", err)
 	}
-	badRegions := map[string]bool {
-		"eu-south-1": true,
-		"af-south-1": true,
-		"ap-east-1": true,
-		"me-south-1": true,
-		"cn-north-1": true,
-		"cn-northwest-1": true,
-	}
 	for _, r := range regions {
-		if badRegions[r] {
-			log.Printf("Not handling %s yet\n", r)
-			continue
-		}
-		log.Printf("region: %s\n", r)
 		itypes, err := ec2.ListInstanceTypesByLocation(r)
 		if err != nil {
 			log.Fatalf("Failed to list instance types for %s: %+v\n", r, err)

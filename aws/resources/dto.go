@@ -18,6 +18,8 @@ type InstanceType struct {
 	InstanceStorageSupported bool
 	// This is only set when InstanceStorageSupported is true.
 	InstanceStorageMaxSizeGb uint64
+	// This tells you whether the instance storage is ssd or hdd.
+	InstanceStorageType string
 
 	ValidCores []uint32
 	GpuCount uint32

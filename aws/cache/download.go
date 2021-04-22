@@ -73,9 +73,6 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 				fmt.Printf("sku %s is for an instance with attributes %+v\n",
 				sku, attributes)
 				/*
-					if err := insertInstanceType(db, sku, attributes); err != nil {
-						return err
-					}
 					if err := insertInstanceSku(db, sku, attributes); err != nil {
 						return err
 					}
@@ -207,57 +204,6 @@ func insertInstanceSku(db *sql.DB, sku string, attributes map[string]interface{}
 	return nil
 }
 
-func insertInstanceType(db *sql.DB, sku string, attributes map[string]interface{}) error {
-	var itype string
-	var ifamily string
-	itype, ok := attributes["instanceType"].(string)
-	if !ok {
-		return fmt.Errorf("attribute map %v for sku %s missing instance type", attributes, sku)
-	}
-	ifamily, ok = attributes["instanceFamily"].(string)
-	if !ok {
-		return fmt.Errorf("attribute map %v missing instance family",
-			attributes)
-	}
-	var vcpu uint32
-	fmt.Sscanf(attributes["vcpu"].(string), "%d", &vcpu)
-	var memory uint32
-	fmt.Sscanf(attributes["memory"].(string), "%d GiB", &memory)
-	var gpu uint32
-	if gpuspec, ok := attributes["gpu"].(string); ok {
-		fmt.Sscanf(gpuspec, "%d", &gpu)
-	}
-	storageType, sizeGb, err := parseStorageSpec(attributes["storage"].(string))
-	if err != nil {
-		return err
-	}
-	insert := `INSERT INTO InstanceTypes (InstanceType, InstanceFamily,
-	CPU, Memory, GPU, StorageType, StorageAmount)
-	VALUES (?, ?, ?, ?, ?, ?, ?);`
-	stmt, err := db.Prepare(insert)
-	_, err = stmt.Exec(itype, ifamily, vcpu, memory, gpu, storageType, sizeGb)
-	if err != nil {
-		return err
-	}
-	region, err := getRegion(db, attributes)
-	if err != nil {
-		return err
-	}
-	if region != "" {
-		regionInsert := `INSERT INTO InstanceTypeByRegion (
-			InstanceType, Region) VALUES (?, ?);`
-		stmt, err = db.Prepare(regionInsert)
-		_, err = stmt.Exec(attributes["instanceType"], region)
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Printf("missing handler for location type %s for instance type %s\n",
-			attributes["locationType"], attributes["instanceType"])
-	}
-	return nil
-}
-
 func getRegion(db *sql.DB, attributes map[string]interface{}) (string, error) {
 	if attributes["locationType"].(string) == "AWS Region" {
 		regionId, err := RegionByDisplayName(
@@ -275,27 +221,4 @@ func getRegion(db *sql.DB, attributes map[string]interface{}) (string, error) {
 	log.Printf("unsupported location type: %s\n",
 		attributes["locationType"].(string))
 	return "", nil
-}
-
-func parseStorageSpec(spec string) (string, uint32, error) {
-	if spec == "EBS only" {
-		return spec, 0, nil
-	}
-	var times uint32
-	var sizeGb uint32
-	var diskTech string
-	// Maybe this should use a regexp.
-	res, _ := fmt.Sscanf(spec, "%d x %d %s", &times, &sizeGb, &diskTech)
-	if res != 3 {
-		res, _ := fmt.Sscanf(spec, "%d GB %s", &sizeGb, &diskTech)
-		if res != 2 {
-			return "", 0, fmt.Errorf("failed to parse storage spec %s",
-				spec)
-		}
-		times = 1
-	}
-	if diskTech == "NvMe" {
-		diskTech = "NvMe SSD"
-	}
-	return diskTech, times * sizeGb, nil
 }

@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+// Some regions show up in the list but aren't actually supported yet.
+var UnsupportedRegions = map[string]bool {
+		"eu-south-1": true,
+		"af-south-1": true,
+		"ap-east-1": true,
+		"me-south-1": true,
+		"cn-north-1": true,
+		"cn-northwest-1": true,
+	}
+
 // Returns the common.geo continent for an AWS region.
 // This function gets called when verifying whether a given
 // AWS region satisfies a location constraint. The converse
@@ -127,7 +137,7 @@ func IsWavelengthZone(p string) bool {
 	return p == "Verizon" || p == "SKT" || p == "KDDI"
 }
 
-func AllRegions(db *sql.DB) ([]string, error) {
+func AllRegions(db *sql.DB, onlySupported bool) ([]string, error) {
 	query := `SELECT ID from Regions where Special=0;`
 	res, err := db.Query(query)
 	if err != nil {
@@ -140,6 +150,9 @@ func AllRegions(db *sql.DB) ([]string, error) {
 		err = res.Scan(&regionId)
 		if err != nil {
 			return nil, err
+		}
+		if onlySupported && UnsupportedRegions[regionId] {
+			continue
 		}
 		regions = append(regions, regionId)
 	}
