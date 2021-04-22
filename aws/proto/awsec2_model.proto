@@ -1,0 +1,46 @@
+// AWS EC2-specific extensions for the asset model
+
+syntax = "proto3";
+
+package model;
+option go_package = ".;resources";
+
+message Ec2VM {
+  string instance_type = 1;  // The full instance type, such as "t3.medium"
+  string region = 2; // The Aws Region, for a regional instance
+  string zone = 3; // Wavelength Zone or local Zone, for a zonal instance
+
+  // TODO: maybe combine term_type, purchase_option, offering_class, and tenancy
+  // into one proto?
+  string term_type = 4;  // OnDemand or Reserved
+  string purchase_option = 5; // only for TermType=Reserved: "No Upfront", "Partial Upfront" or "All Upfront"
+  string offering_class = 6; // Only for TermType=Reserved: "convertible" or "standard"
+
+  string tenancy = 7; // Dedicated, Shared, Host, NA, Reserved
+  string os = 8; // Linux, SUSE, Windows, RHEL, NA.
+
+  // No License required, Bring your own license, NA -- not sure if relevant here.
+  string license_model = 9;
+}
+
+message Ec2Disk {
+  string volume_type = 1; // General Purpose, Throughput Optimized HDD, Cold HDD.
+
+  // The volume type has a maximum size, this is the actual size. Note the minimal 
+  // size tends to be something like 1GiB.
+  uint64 actual_size_gb = 2;
+}
+
+message Ec2Network {
+  // Product Family: Load Balancer-Application, Load Balancer,
+  // Load Balancer-Network, NAT Gateway, IP Address, Data Transfer
+
+  // data transfer has a transfer_type field with values
+  // InterRegoin Outbound, IntraRegion, InterRegion Inbound,
+  // AWS Outbound, AWS Inbound
+  // data transfer is also the only product family that uses the "From Location"
+  // and "To Location" fields
+}
+
+
+

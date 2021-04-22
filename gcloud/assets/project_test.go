@@ -48,9 +48,9 @@ func readAssetsFile(filename string) ([]SmallAsset, error) {
 
 type SortableDiskSet []*common.DiskSet
 
-func(a SortableDiskSet) Len() int { return len(a) }
-func(a SortableDiskSet) Less(i, j int) bool { return a[i].Name < a[j].Name }
-func(a SortableDiskSet) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a SortableDiskSet) Len() int           { return len(a) }
+func (a SortableDiskSet) Less(i, j int) bool { return a[i].Name < a[j].Name }
+func (a SortableDiskSet) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func TestBuildProject(t *testing.T) {
 	assets, err := readAssetsFile("testdata/assets")

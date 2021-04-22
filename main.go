@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/mitchellh/cli"
 	"log"
+	awscmds "nephomancy/aws/command"
 	"nephomancy/common/command"
 	dcscmds "nephomancy/dcs/command"
 	gcmds "nephomancy/gcloud/command"
@@ -18,6 +19,15 @@ func main() {
 		},
 		"cost": func() (cli.Command, error) {
 			return &command.CostCommand{}, nil
+		},
+		"aws init": func() (cli.Command, error) {
+			return &awscmds.InitCommand{}, nil
+		},
+		"aws regions": func() (cli.Command, error) {
+			return &awscmds.RegionsCommand{}, nil
+		},
+		"aws list": func() (cli.Command, error) {
+			return &awscmds.ListCommand{}, nil
 		},
 		"dcs init": func() (cli.Command, error) {
 			return &dcscmds.InitCommand{}, nil

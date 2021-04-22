@@ -3,9 +3,9 @@
 package provider
 
 import (
+	"github.com/go-test/deep"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io/ioutil"
-	"github.com/go-test/deep"
 	"nephomancy/common/registry"
 	common "nephomancy/common/resources"
 	"testing"
@@ -74,7 +74,7 @@ func TestGetCost(t *testing.T) {
 		"VM CPU", "1", "2 cpus, 16 gb memory in CH, EMEA",
 		"1440 h per month", "39.99 CHF", "1460 h per month", "40.54 CHF",
 	}
-        wantedCosts[1] = []string{
+	wantedCosts[1] = []string{
 		"VM RAM", "16", "2 cpus, 16 gb memory in CH, EMEA",
 		"11520 GB-hours per month", "167.96 CHF", "11680 GB-hours per month",
 		"170.29 CHF",
