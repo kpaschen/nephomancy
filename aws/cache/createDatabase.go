@@ -104,7 +104,9 @@ func createVolumeTypesTable(db *sql.DB) error {
 		"StorageMedia" TEXT,
 		"MaxVolumeSize" INTEGER,
 		"MaxIOPS" INTEGER,
-		"MaxThroughput" INTEGER
+		"MaxThroughput" INTEGER,
+		"MultiAttach" INTEGER,
+		"VolumeApiType" STRING
 	);`
 	if err := createTable(db, createVolumeTypesTableSQL); err != nil {
 		return err
@@ -127,22 +129,6 @@ func createTypeByRegionTables(db *sql.DB) error {
 		ON UPDATE NO ACTION
 	);`
 	if err := createTable(db, createInstanceTypeRegionTableSQL); err != nil {
-		return err
-	}
-	createVolumeTypeRegionTableSQL := `CREATE TABLE IF NOT EXISTS VolumeTypeByRegion (
-		"VolumeType" NOT NULL,
-		"Region" TEXT NOT NULL,
-		UNIQUE (VolumeType, Region)
-		FOREIGN KEY (VolumeType)
-		REFERENCES VolumeTypes (VolumeType)
-		ON DELETE CASCADE
-		ON UPDATE NO ACTION
-		FOREIGN KEY (Region)
-		REFERENCES Regions (ID)
-		ON DELETE CASCADE
-		ON UPDATE NO ACTION
-	);`
-	if err := createTable(db, createVolumeTypeRegionTableSQL); err != nil {
 		return err
 	}
 	return nil

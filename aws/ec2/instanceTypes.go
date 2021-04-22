@@ -128,7 +128,8 @@ func MakeDto(typeInfo ec2.InstanceTypeInfo) (*resources.InstanceType, error) {
 			if count != 1 || err != nil {
 				count, err = fmt.Sscanf(perfString, "%d Gigabit", &np)
 				if count != 1 || err != nil {
-					count, err = fmt.Sscanf(perfString, "%*s %d Gigabit", &np)
+					var garbage string
+					count, err = fmt.Sscanf(perfString, "%s %d Gigabit", &garbage, &np)
 					if count != 2 || err != nil {
 						fmt.Printf(
 							"failed to parse network performance out of spec: %s\n",

@@ -12,9 +12,9 @@ func PopulateDatabase(db *sql.DB) error {
 	if err := populateRegions(db); err != nil {
 		return err
 	}
-	//if err := getPricesInBulk(db, "", "index.json"); err != nil {
-	//	return err
-	//}
+	if err := populateVolumeTypes(db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -52,6 +52,28 @@ func populateRegions(db *sql.DB) error {
 			if err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func populateVolumeTypes(db *sql.DB) error {
+	insert := `REPLACE INTO VolumeTypes(VolumeType, StorageMedia,
+	MaxVolumeSize, MaxIOPS, MaxThroughput, MultiAttach, VolumeApiType)
+	VALUES(?, ?, ?, ?, ?, ?, ?);`
+	stmt, err := db.Prepare(insert)
+	if err != nil {
+		return err
+	}
+	for _, vt := range resources.StandardVolumeTypes() {
+		multiAttach := 0
+		if vt.MultiAttach {
+			multiAttach = 1
+		}
+		_, err = stmt.Exec(vt.Name, vt.Media, vt.MaxVolumeSizeGiB, vt.MaxIOPSPerVolumeKiB,
+		vt.MaxThroughputPerVolumeMiBs, multiAttach, vt.VolumeApiType)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

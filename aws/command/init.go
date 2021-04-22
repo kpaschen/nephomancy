@@ -68,16 +68,13 @@ func (c *InitCommand) Run(args []string) int {
 	// Assume us-east-1 has all instance types that exist.
 	go ec2.DescribeInstanceTypes(nil, "us-east-1", sendToDb, okFromDb, retval)
 	go cache.InsertInstanceTypes(prov.DbHandle, sendToDb, okFromDb)
-	fmt.Println("no going into select")
 	select {
 	case failure := <-retval:
-		fmt.Println("read value from retval channel")
 		if failure != nil {
 			log.Fatalf("Could not get instance type descriptions: %v\n", failure)
 		}
 	}
 	close(retval)
-	fmt.Println("done with the channels")
 
 	regions, err := cache.AllRegions(prov.DbHandle, true)
 	if err != nil {
