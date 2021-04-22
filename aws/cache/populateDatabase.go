@@ -57,6 +57,25 @@ func populateRegions(db *sql.DB) error {
 	return nil
 }
 
+func InsertInstanceTypes(db *sql.DB, fromEc2 <-chan *resources.InstanceType, toEc2 chan<- error) {
+	for {
+		select {
+		case itype := <-fromEc2:
+			// A nil itype means end of channel.
+			if itype == nil {
+				toEc2 <- nil
+				return
+			}
+			err := InsertInstanceType(db, *itype)
+			if err != nil {
+				toEc2 <- err
+				return
+			}
+		}
+		toEc2 <- nil
+	}
+}
+
 func InsertInstanceType(db *sql.DB, itype resources.InstanceType) error {
 	insert := `REPLACE INTO InstanceTypes(InstanceType, CPU, Memory,
 	GPU, NetworkPerformance, StorageType, StorageAmount, SupportsSpot,
@@ -81,8 +100,8 @@ func InsertInstanceType(db *sql.DB, itype resources.InstanceType) error {
 		}
 	}
 	_, err = stmt.Exec(itype.Name, itype.DefaultCpuCount,
-	itype.MemoryMiB, itype.GpuCount, itype.NetworkPerformanceGbit,
-	instanceStorage, itype.InstanceStorageMaxSizeGb, supportsSpot, supportsOnDemand)
+		itype.MemoryMiB, itype.GpuCount, itype.NetworkPerformanceGbit,
+		instanceStorage, itype.InstanceStorageMaxSizeGb, supportsSpot, supportsOnDemand)
 	if err != nil {
 		return err
 	}

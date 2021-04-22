@@ -6,6 +6,7 @@ import (
 	"nephomancy/aws/cache"
 	"nephomancy/aws/ec2"
 	"nephomancy/aws/provider"
+	"nephomancy/aws/resources"
 	common "nephomancy/common/command"
 	"nephomancy/common/registry"
 	"strings"
@@ -58,18 +59,26 @@ func (c *InitCommand) Run(args []string) int {
 		log.Fatalf("Failed to populate database: %v\n", err)
 	}
 
+	sendToDb := make(chan *resources.InstanceType, 1)
+	okFromDb := make(chan error, 1)
+	retval := make(chan error, 1)
+	defer close(sendToDb)
+	defer close(okFromDb)
+
 	// Assume us-east-1 has all instance types that exist.
-	instanceTypes, err := ec2.DescribeInstanceTypes(nil, "us-east-1")
-	if err != nil {
-		log.Fatalf("Could not get instance type descriptions: %v\n", err)
-	}
-	// This should really be done with channels so I don't have to get all the instance types
-	// first and use memory for them.
-	for _, it := range instanceTypes {
-		if err = cache.InsertInstanceType(prov.DbHandle, *it); err != nil {
-			log.Fatalf("insertion of %+v failed: %+v\n", *it, err)
+	go ec2.DescribeInstanceTypes(nil, "us-east-1", sendToDb, okFromDb, retval)
+	go cache.InsertInstanceTypes(prov.DbHandle, sendToDb, okFromDb)
+	fmt.Println("no going into select")
+	select {
+	case failure := <-retval:
+		fmt.Println("read value from retval channel")
+		if failure != nil {
+			log.Fatalf("Could not get instance type descriptions: %v\n", failure)
 		}
 	}
+	close(retval)
+	fmt.Println("done with the channels")
+
 	regions, err := cache.AllRegions(prov.DbHandle, true)
 	if err != nil {
 		log.Fatalf("failed to get regions: %+v\n", err)

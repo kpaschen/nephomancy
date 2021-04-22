@@ -10,8 +10,9 @@ import (
 	"nephomancy/aws/resources"
 )
 
-func DescribeInstanceTypes(instanceTypes []string, region string) (
-	[]*resources.InstanceType, error) {
+func DescribeInstanceTypes(
+	instanceTypes []string, region string,
+	toDb chan<- *resources.InstanceType, fromDb <-chan error, retval chan<- error) {
 	if region == "" {
 		region = "us-east-1"
 	}
@@ -19,8 +20,7 @@ func DescribeInstanceTypes(instanceTypes []string, region string) (
 		Region: aws.String(region),
 	}))
 	svc := ec2.New(sess)
-	var pageSize int64 = 10
-	ret := make([]*resources.InstanceType, 0)
+	var pageSize int64 = 5
 	request := &ec2.DescribeInstanceTypesInput{
 		MaxResults: aws.Int64(pageSize),
 	}
@@ -33,26 +33,33 @@ func DescribeInstanceTypes(instanceTypes []string, region string) (
 	for {
 		typeInfoList, err := svc.DescribeInstanceTypes(request)
 		if err != nil {
-			return nil, fmt.Errorf("could not get instance types at location %s\n", region)
+			retval <- err
+			return
 		}
-		instanceTypes := make([]*resources.InstanceType,
-		                      len(typeInfoList.InstanceTypes))
-		for idx, typeInfo := range typeInfoList.InstanceTypes {
-			instanceTypes[idx], err = MakeDto(*typeInfo)
+		for _, typeInfo := range typeInfoList.InstanceTypes {
+			instanceType, err := MakeDto(*typeInfo)
 			if err != nil {
-				return nil, fmt.Errorf(
+				retval <- fmt.Errorf(
 					"could not convert instance type info %v to dto: %v",
 					*typeInfo, err)
+				return
+			}
+			toDb <- instanceType
+			result := <-fromDb
+			if result != nil {
+				retval <- result
+				return
 			}
 		}
-		ret = append(ret, instanceTypes...)
 		if typeInfoList.NextToken == nil {
 			break
 		}
 		request.NextToken = typeInfoList.NextToken
 	}
-
-	return ret, nil
+	// Let the cache know the list of instance types is finished.
+	toDb <- nil
+	<-fromDb
+	retval <- nil
 }
 
 func ListInstanceTypesByLocation(region string) ([]string, error) {
@@ -67,8 +74,8 @@ func ListInstanceTypesByLocation(region string) ([]string, error) {
 		LocationType: aws.String("region"),
 		Filters: []*ec2.Filter{
 			{
-				Name: aws.String("location"),
-				Values: aws.StringSlice([]string{ region }),
+				Name:   aws.String("location"),
+				Values: aws.StringSlice([]string{region}),
 			},
 		},
 		MaxResults: aws.Int64(pageSize),
@@ -93,22 +100,27 @@ func ListInstanceTypesByLocation(region string) ([]string, error) {
 }
 
 func MakeDto(typeInfo ec2.InstanceTypeInfo) (*resources.InstanceType, error) {
-        var mem uint64 = 0
-        if typeInfo.MemoryInfo != nil {
-                mem = uint64(*typeInfo.MemoryInfo.SizeInMiB)
-        } else {
-                return nil, fmt.Errorf("no memory info found in instance type %+v", typeInfo)
-        }
+	var mem uint64 = 0
+	if typeInfo.MemoryInfo != nil {
+		mem = uint64(*typeInfo.MemoryInfo.SizeInMiB)
+	} else {
+		return nil, fmt.Errorf("no memory info found in instance type %+v", typeInfo)
+	}
 	var np uint32 = 0
 	if typeInfo.NetworkInfo != nil {
 		perfString := *typeInfo.NetworkInfo.NetworkPerformance
 		switch perfString {
 		// These numbers are based on some stackoverflow research.
-		case "Very Low": np = 1
-		case "Low": np = 1
-		case "Moderate": np = 5
-		case "Low to Moderate": np = 1
-		case "High": np = 10
+		case "Very Low":
+			np = 1
+		case "Low":
+			np = 1
+		case "Moderate":
+			np = 5
+		case "Low to Moderate":
+			np = 1
+		case "High":
+			np = 10
 		default:
 			// Should maybe divide np by 5 or so if the spec says "Up to". I'm pretty
 			// sure "Up to" is some kind of burst/peak performance only.
@@ -157,16 +169,16 @@ func MakeDto(typeInfo ec2.InstanceTypeInfo) (*resources.InstanceType, error) {
 		instanceStorageType = *typeInfo.InstanceStorageInfo.Disks[0].Type
 	}
 
-        return &resources.InstanceType{
-                Name: *typeInfo.InstanceType,
-                MemoryMiB: mem,
-		NetworkPerformanceGbit: np,
-		SupportedUsageClasses: usageClasses,
-		DefaultCpuCount: cpuCount,
-		ValidCores: validCores,
+	return &resources.InstanceType{
+		Name:                     *typeInfo.InstanceType,
+		MemoryMiB:                mem,
+		NetworkPerformanceGbit:   np,
+		SupportedUsageClasses:    usageClasses,
+		DefaultCpuCount:          cpuCount,
+		ValidCores:               validCores,
 		InstanceStorageSupported: *typeInfo.InstanceStorageSupported,
 		InstanceStorageMaxSizeGb: instanceStorage,
-		InstanceStorageType: instanceStorageType,
-		GpuCount: gpuCount,
-        }, nil
+		InstanceStorageType:      instanceStorageType,
+		GpuCount:                 gpuCount,
+	}, nil
 }

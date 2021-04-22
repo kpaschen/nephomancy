@@ -32,12 +32,14 @@ func (r *ListCommand) Run(args []string) int {
 	}
 	fmt.Printf("instance types in region %s: %+v\n", r.region, itypes)
 
-	instanceTypes, err := ec2.DescribeInstanceTypes(nil, r.region)
-	if err != nil {
-		log.Fatalf("Failed to describe aws instance type offerings: %v\n", err)
-	}
-	for _, it := range instanceTypes {
-		fmt.Printf("description: %+v\n", *it)
-	}
+	/*
+		instanceTypes, err := ec2.DescribeInstanceTypes(nil, r.region)
+		if err != nil {
+			log.Fatalf("Failed to describe aws instance type offerings: %v\n", err)
+		}
+		for _, it := range instanceTypes {
+			fmt.Printf("description: %+v\n", *it)
+		}
+	*/
 	return 0
 }

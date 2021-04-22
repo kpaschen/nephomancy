@@ -233,7 +233,7 @@ func resolveDisks(pip *ProjectInProgress) error {
 		}
 		// No disk set with the given fingerprint yet
 		dset := common.DiskSet{
-			Name: fp,
+			Name:     fp,
 			Template: dsk,
 			Count:    1,
 		}

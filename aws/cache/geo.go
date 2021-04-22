@@ -9,14 +9,14 @@ import (
 )
 
 // Some regions show up in the list but aren't actually supported yet.
-var UnsupportedRegions = map[string]bool {
-		"eu-south-1": true,
-		"af-south-1": true,
-		"ap-east-1": true,
-		"me-south-1": true,
-		"cn-north-1": true,
-		"cn-northwest-1": true,
-	}
+var UnsupportedRegions = map[string]bool{
+	"eu-south-1":     true,
+	"af-south-1":     true,
+	"ap-east-1":      true,
+	"me-south-1":     true,
+	"cn-north-1":     true,
+	"cn-northwest-1": true,
+}
 
 // Returns the common.geo continent for an AWS region.
 // This function gets called when verifying whether a given

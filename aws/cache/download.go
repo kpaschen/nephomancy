@@ -71,7 +71,7 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 			// Not covering "Dedicated Host" for now.
 			if pf == "Compute Instance" || pf == "Compute Instance (bare metal)" {
 				fmt.Printf("sku %s is for an instance with attributes %+v\n",
-				sku, attributes)
+					sku, attributes)
 				/*
 					if err := insertInstanceSku(db, sku, attributes); err != nil {
 						return err
@@ -80,9 +80,9 @@ func getPricesInBulk(db *sql.DB, url string, filename string) error {
 			} else if pf == "Storage" {
 				fmt.Printf("sku %s storage: %v\n", sku, attributes)
 				/*
-				if err := insertVolumeType(db, attributes); err != nil {
-					return err
-				}
+					if err := insertVolumeType(db, attributes); err != nil {
+						return err
+					}
 				*/
 
 			} else {
