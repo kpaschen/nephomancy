@@ -31,61 +31,61 @@ type InstanceType struct {
 // or "System Operation" and the "Group" is something like "EBS
 // Throughput".
 type VolumeType struct {
-	Name string
-	VolumeApiType string
-	Media string
-	MaxVolumeSizeGiB uint32
-	MaxIOPSPerVolumeKiB uint32
+	Name                       string
+	VolumeApiType              string
+	Media                      string
+	MaxVolumeSizeGiB           uint32
+	MaxIOPSPerVolumeKiB        uint32
 	MaxThroughputPerVolumeMiBs uint32
-	MultiAttach bool
+	MultiAttach                bool
 }
 
 func StandardVolumeTypes() []VolumeType {
-	return []VolumeType {
+	return []VolumeType{
 		VolumeType{
-			Name: "Provisioned IOPS",
-			VolumeApiType: "io1",
-			Media: "SSD-backed",
-			MaxVolumeSizeGiB: uint32(16384),
-			MaxIOPSPerVolumeKiB: uint32(64000),
+			Name:                       "Provisioned IOPS",
+			VolumeApiType:              "io1",
+			Media:                      "SSD-backed",
+			MaxVolumeSizeGiB:           uint32(16384),
+			MaxIOPSPerVolumeKiB:        uint32(64000),
 			MaxThroughputPerVolumeMiBs: uint32(1000),
-			MultiAttach: true,
+			MultiAttach:                true,
 		},
 		VolumeType{
-			Name: "Provisioned IOPS",
-			VolumeApiType: "io2",
-			Media: "SSD-backed",
-			MaxVolumeSizeGiB: uint32(16384),
-			MaxIOPSPerVolumeKiB: uint32(64000),
+			Name:                       "Provisioned IOPS",
+			VolumeApiType:              "io2",
+			Media:                      "SSD-backed",
+			MaxVolumeSizeGiB:           uint32(16384),
+			MaxIOPSPerVolumeKiB:        uint32(64000),
 			MaxThroughputPerVolumeMiBs: uint32(1000),
-			MultiAttach: true,
+			MultiAttach:                true,
 		},
 		VolumeType{
-			Name: "General Purpose",
-			VolumeApiType: "io2",
-			Media: "SSD-backed",
-			MaxVolumeSizeGiB: uint32(16384),
-			MaxIOPSPerVolumeKiB: uint32(16000),
+			Name:                       "General Purpose",
+			VolumeApiType:              "io2",
+			Media:                      "SSD-backed",
+			MaxVolumeSizeGiB:           uint32(16384),
+			MaxIOPSPerVolumeKiB:        uint32(16000),
 			MaxThroughputPerVolumeMiBs: uint32(250),
-			MultiAttach: false,
+			MultiAttach:                false,
 		},
 		VolumeType{
-			Name: "Throughput Optimized HDD",
-			VolumeApiType: "st1",
-			Media: "HDD-backed",
-			MaxVolumeSizeGiB: uint32(16384),
-			MaxIOPSPerVolumeKiB: uint32(500),
+			Name:                       "Throughput Optimized HDD",
+			VolumeApiType:              "st1",
+			Media:                      "HDD-backed",
+			MaxVolumeSizeGiB:           uint32(16384),
+			MaxIOPSPerVolumeKiB:        uint32(500),
 			MaxThroughputPerVolumeMiBs: uint32(500),
-			MultiAttach: false,
+			MultiAttach:                false,
 		},
 		VolumeType{
-			Name: "Cold HDD",
-			VolumeApiType: "sc1",
-			Media: "HDD-backed",
-			MaxVolumeSizeGiB: uint32(16384),
-			MaxIOPSPerVolumeKiB: uint32(250),
+			Name:                       "Cold HDD",
+			VolumeApiType:              "sc1",
+			Media:                      "HDD-backed",
+			MaxVolumeSizeGiB:           uint32(16384),
+			MaxIOPSPerVolumeKiB:        uint32(250),
 			MaxThroughputPerVolumeMiBs: uint32(250),
-			MultiAttach: false,
+			MultiAttach:                false,
 		},
 	}
 }

@@ -71,7 +71,7 @@ func populateVolumeTypes(db *sql.DB) error {
 			multiAttach = 1
 		}
 		_, err = stmt.Exec(vt.Name, vt.Media, vt.MaxVolumeSizeGiB, vt.MaxIOPSPerVolumeKiB,
-		vt.MaxThroughputPerVolumeMiBs, multiAttach, vt.VolumeApiType)
+			vt.MaxThroughputPerVolumeMiBs, multiAttach, vt.VolumeApiType)
 		if err != nil {
 			return err
 		}
