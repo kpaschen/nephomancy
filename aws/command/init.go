@@ -76,10 +76,7 @@ func (c *InitCommand) Run(args []string) int {
 	}
 	close(retval)
 
-	regions, err := cache.AllRegions(prov.DbHandle, true)
-	if err != nil {
-		log.Fatalf("failed to get regions: %+v\n", err)
-	}
+	regions := cache.AllRegions(true)
 	for _, r := range regions {
 		itypes, err := ec2.ListInstanceTypesByLocation(r)
 		if err != nil {

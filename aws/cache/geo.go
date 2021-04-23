@@ -1,11 +1,11 @@
 package cache
 
 import (
-	"database/sql"
-	"fmt"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"log"
-	"nephomancy/common/geo"
-	"strings"
+	cgeo "nephomancy/common/geo"
+	common "nephomancy/common/resources"
+	"regexp"
 )
 
 // Some regions show up in the list but aren't actually supported yet.
@@ -18,6 +18,54 @@ var UnsupportedRegions = map[string]bool{
 	"cn-northwest-1": true,
 }
 
+type Region struct {
+	Description string
+	Country string
+	Continent string
+	IsSpecialRegion bool
+}
+
+var Regions map[string]Region
+
+func init() {
+	initializeRegions()
+}
+
+// Internal method for initializing the Regions map.
+// Not threadsafe.
+func initializeRegions() {
+	Regions = make(map[string]Region)
+	re := regexp.MustCompile(`([a-zA-Z ]+) \(([^\)]+)\)`)
+	for _, partition := range endpoints.DefaultPartitions() {
+                for _, rg := range partition.Regions() {
+                        regionId := rg.ID()
+                        desc := rg.Description()
+                        places := re.FindStringSubmatch(desc)
+                        continent := ""
+                        country := ""
+                        specialRegion := false
+                        if len(places) == 0 {
+                                continent = ContinentFromDisplayName(desc, "").String()
+                                specialRegion = true
+                        } else {
+                                continent = ContinentFromDisplayName(
+                                        places[1], places[2]).String()
+                                country = CountryFromDisplayName(
+                                        places[1], places[2])
+                                if IsSpecial(places[1]) {
+                                        specialRegion =true
+                                }
+                        }
+			Regions[regionId] = Region{
+				Description: desc,
+				Country: country,
+				Continent: continent,
+				IsSpecialRegion: specialRegion,
+			}
+                }
+        }
+}
+
 // Returns the common.geo continent for an AWS region.
 // This function gets called when verifying whether a given
 // AWS region satisfies a location constraint. The converse
@@ -25,39 +73,39 @@ var UnsupportedRegions = map[string]bool{
 // ISO clusters for NorthAmerica, nor should it return China
 // clusters for Asia unless China is explicitly selected as the
 // country.
-func ContinentFromDisplayName(p1 string, p2 string) geo.Continent {
+func ContinentFromDisplayName(p1 string, p2 string) cgeo.Continent {
 	switch p1 {
 	case "Africa":
-		return geo.Africa
+		return cgeo.Africa
 	case "Europe":
-		return geo.Europe
+		return cgeo.Europe
 	case "EU":
-		return geo.Europe // Aws is inconsistent about display names
+		return cgeo.Europe // Aws is inconsistent about display names
 	case "Asia Pacific":
 		if p2 == "Sydney" {
-			return geo.Australia
+			return cgeo.Australia
 		}
-		return geo.Asia
+		return cgeo.Asia
 	case "China":
-		return geo.Asia
+		return cgeo.Asia
 	case "Canada":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "Middle East":
-		return geo.Asia
+		return cgeo.Asia
 	case "US East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US West":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "South America":
-		return geo.LatinAmerica
+		return cgeo.LatinAmerica
 	case "AWS GovCloud":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US ISO East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US ISOB East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	default:
-		return geo.UnknownC
+		return cgeo.UnknownC
 	}
 }
 
@@ -137,86 +185,83 @@ func IsWavelengthZone(p string) bool {
 	return p == "Verizon" || p == "SKT" || p == "KDDI"
 }
 
-func AllRegions(db *sql.DB, onlySupported bool) ([]string, error) {
-	query := `SELECT ID from Regions where Special=0;`
-	res, err := db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Close()
-	var regionId string
-	regions := make([]string, 0)
-	for res.Next() {
-		err = res.Scan(&regionId)
-		if err != nil {
-			return nil, err
-		}
-		if onlySupported && UnsupportedRegions[regionId] {
+func AllRegions(onlySupported bool) []string {
+	ret := make([]string, 0, len(Regions))
+	for rid, _ := range Regions {
+		if onlySupported && UnsupportedRegions[rid] {
 			continue
 		}
-		regions = append(regions, regionId)
+		ret = append(ret, rid)
 	}
-	return regions, nil
+	return ret
 }
 
-func RegionsByContinent(db *sql.DB, continent geo.Continent) ([]string, error) {
-	// Retrieve regions from db, then filter out
-	// govcloud, iso and cn clusters.
-	query := `SELECT ID from Regions WHERE Continent=? AND Special=0 AND Country<>"CN";`
-	res, err := db.Query(query, continent.String())
-	if err != nil {
-		return nil, err
-	}
-	defer res.Close()
-	var regionId string
-	regions := make([]string, 0)
-	for res.Next() {
-		err = res.Scan(&regionId)
-		if err != nil {
-			return nil, fmt.Errorf("Error scanning row: %v", err)
+func RegionsByContinent(continent cgeo.Continent) []string {
+	ret := make([]string, 0, len(Regions))
+	for rid, region := range Regions {
+		if region.Continent == continent.String() {
+			ret = append(ret, rid)
 		}
-		regions = append(regions, regionId)
 	}
-	return regions, nil
+	return ret
 }
 
-func RegionsByCountry(db *sql.DB, cc string) ([]string, error) {
-	// Retrieve from db. Don't return govcloud or iso clusters.
-	query := `SELECT ID from Regions WHERE Country=? AND Special=0;`
-	res, err := db.Query(query, cc)
-	if err != nil {
-		return nil, err
+func CountryByRegion(region string) string {
+	r, ok := Regions[region]
+	if ok {
+		return r.Country
 	}
-	defer res.Close()
-	var regionId string
-	regions := make([]string, 0)
-	for res.Next() {
-		err = res.Scan(&regionId)
-		if err != nil {
-			return nil, fmt.Errorf("Error scanning row: %v", err)
-		}
-		regions = append(regions, regionId)
-	}
-	return regions, nil
+	return "Unknown"
 }
 
-func RegionByDisplayName(db *sql.DB, name string) (string, error) {
-	normalName := strings.Replace(name, "EU", "Europe", 1)
-	query := `SELECT ID from Regions WHERE DisplayName=?;`
-	res, err := db.Query(query, normalName)
-	if err != nil {
-		return "", err
-	}
-	defer res.Close()
-	var regionId string
-	if res.Next() {
-		err = res.Scan(&regionId)
-		if err != nil {
-			return "", fmt.Errorf("Error scanning row: %v", err)
+func RegionsByCountry(cc string) []string {
+	ret := make([]string, 0, len(Regions))
+	for rid, region := range Regions {
+		if region.Country == cc {
+			ret = append(ret, rid)
 		}
-		return regionId, nil
 	}
-	log.Printf("Did not find a region for display name %s normalized to %s",
-		name, normalName)
-	return "", nil
+	return ret
+}
+
+func RegionByDisplayName(name string) string {
+	for rid, region := range Regions {
+		if region.Description == name {
+			return rid
+		}
+	}
+	return ""
+}
+
+// Returns all regions consistent with loc.
+// If preferred is not empty, and is contained in the possible regions,
+// return only preferred region.
+func RegionsForLocation(loc common.Location, preferred string) []string {
+	var regions []string
+	if loc.CountryCode != "" {
+		regions = RegionsByCountry(loc.CountryCode)
+	} else if loc.Continent != "" {
+		regions = RegionsByContinent(cgeo.ContinentFromString(loc.Continent))
+	} else if loc.GlobalRegion != "" {
+		regions = make([]string, 0)
+		continents := cgeo.GetContinents(cgeo.RegionFromString(loc.GlobalRegion))
+		for _, c := range continents {
+			regions = append(regions, RegionsByContinent(c)...)
+		}
+	}
+	if len(regions) == 0 {
+		if preferred == "" {
+			return RegionsByCountry("US")  // default to US
+		} else {
+			regions = RegionsByCountry("US")
+		}
+	}
+	if preferred != "" {
+		for _, r := range regions {
+			if r == preferred {
+				return []string{r}
+			}
+		}
+	}
+	return regions
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"nephomancy/aws/cache"
 	"nephomancy/common/registry"
 	"nephomancy/common/resources"
 	"os"
@@ -26,7 +27,7 @@ func (a *AwsProvider) FillInProviderDetails(p *resources.Project) error {
 	if a.DbHandle == nil {
 		return fmt.Errorf("Provider has not been initialized.\n")
 	}
-	return nil
+	return cache.FillInProviderDetails(a.DbHandle, p)
 }
 
 func (a *AwsProvider) GetCost(p *resources.Project) ([][]string, error) {

@@ -206,11 +206,7 @@ func insertInstanceSku(db *sql.DB, sku string, attributes map[string]interface{}
 
 func getRegion(db *sql.DB, attributes map[string]interface{}) (string, error) {
 	if attributes["locationType"].(string) == "AWS Region" {
-		regionId, err := RegionByDisplayName(
-			db, attributes["location"].(string))
-		if err != nil {
-			return "", err
-		}
+		regionId := RegionByDisplayName(attributes["location"].(string))
 		if regionId == "" {
 			log.Printf("region %s is not supported.\n",
 				attributes["location"].(string))
