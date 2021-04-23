@@ -93,6 +93,8 @@ func getOsBySpec(spec string) string {
 // Populates provider-specific details from spec if they are empty.
 // If they are not empty, they will be left as they were, but the tool
 // will log a warning message.
+// TODO: this method needs to be shorter, and bits of it could be
+// in common.
 func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	// These are locations that have been resolved into zones or regions.
 	// This is so that if an instance set has the same location spec as

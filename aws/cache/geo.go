@@ -3,7 +3,8 @@ package cache
 import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"log"
-	"nephomancy/common/geo"
+	cgeo "nephomancy/common/geo"
+	common "nephomancy/common/resources"
 	"regexp"
 )
 
@@ -33,6 +34,7 @@ func init() {
 // Internal method for initializing the Regions map.
 // Not threadsafe.
 func initializeRegions() {
+	Regions = make(map[string]Region)
 	re := regexp.MustCompile(`([a-zA-Z ]+) \(([^\)]+)\)`)
 	for _, partition := range endpoints.DefaultPartitions() {
                 for _, rg := range partition.Regions() {
@@ -71,39 +73,39 @@ func initializeRegions() {
 // ISO clusters for NorthAmerica, nor should it return China
 // clusters for Asia unless China is explicitly selected as the
 // country.
-func ContinentFromDisplayName(p1 string, p2 string) geo.Continent {
+func ContinentFromDisplayName(p1 string, p2 string) cgeo.Continent {
 	switch p1 {
 	case "Africa":
-		return geo.Africa
+		return cgeo.Africa
 	case "Europe":
-		return geo.Europe
+		return cgeo.Europe
 	case "EU":
-		return geo.Europe // Aws is inconsistent about display names
+		return cgeo.Europe // Aws is inconsistent about display names
 	case "Asia Pacific":
 		if p2 == "Sydney" {
-			return geo.Australia
+			return cgeo.Australia
 		}
-		return geo.Asia
+		return cgeo.Asia
 	case "China":
-		return geo.Asia
+		return cgeo.Asia
 	case "Canada":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "Middle East":
-		return geo.Asia
+		return cgeo.Asia
 	case "US East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US West":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "South America":
-		return geo.LatinAmerica
+		return cgeo.LatinAmerica
 	case "AWS GovCloud":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US ISO East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	case "US ISOB East":
-		return geo.NorthAmerica
+		return cgeo.NorthAmerica
 	default:
-		return geo.UnknownC
+		return cgeo.UnknownC
 	}
 }
 
@@ -194,7 +196,7 @@ func AllRegions(onlySupported bool) []string {
 	return ret
 }
 
-func RegionsByContinent(continent geo.Continent) []string {
+func RegionsByContinent(continent cgeo.Continent) []string {
 	ret := make([]string, 0, len(Regions))
 	for rid, region := range Regions {
 		if region.Continent == continent.String() {
@@ -229,4 +231,37 @@ func RegionByDisplayName(name string) string {
 		}
 	}
 	return ""
+}
+
+// Returns all regions consistent with loc.
+// If preferred is not empty, and is contained in the possible regions,
+// return only preferred region.
+func RegionsForLocation(loc common.Location, preferred string) []string {
+	var regions []string
+	if loc.CountryCode != "" {
+		regions = RegionsByCountry(loc.CountryCode)
+	} else if loc.Continent != "" {
+		regions = RegionsByContinent(cgeo.ContinentFromString(loc.Continent))
+	} else if loc.GlobalRegion != "" {
+		regions = make([]string, 0)
+		continents := cgeo.GetContinents(cgeo.RegionFromString(loc.GlobalRegion))
+		for _, c := range continents {
+			regions = append(regions, RegionsByContinent(c)...)
+		}
+	}
+	if len(regions) == 0 {
+		if preferred == "" {
+			return RegionsByCountry("US")  // default to US
+		} else {
+			regions = RegionsByCountry("US")
+		}
+	}
+	if preferred != "" {
+		for _, r := range regions {
+			if r == preferred {
+				return []string{r}
+			}
+		}
+	}
+	return regions
 }
