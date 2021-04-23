@@ -13,12 +13,12 @@ func CountryCodeToLocation(cc string) (Location, error) {
 	continent, gr := geo.GetContinent(cc)
 	if continent == geo.UnknownC {
 		return Location{},
-		fmt.Errorf("no continent known for country %s", cc)
+			fmt.Errorf("no continent known for country %s", cc)
 	}
 	return Location{
 		GlobalRegion: gr.String(),
-		Continent: continent.String(),
-		CountryCode: cc,
+		Continent:    continent.String(),
+		CountryCode:  cc,
 	}, nil
 }
 
@@ -26,15 +26,21 @@ func CountryCodeToLocation(cc string) (Location, error) {
 func CheckLocation(loc Location, spec Location) error {
 	if spec.GlobalRegion != "" && spec.GlobalRegion != loc.GlobalRegion {
 		return fmt.Errorf("spec global region %s does not match details: %s",
-		spec.GlobalRegion, loc.GlobalRegion)
+			spec.GlobalRegion, loc.GlobalRegion)
 	}
 	if spec.Continent != "" && spec.Continent != loc.Continent {
 		return fmt.Errorf("spec continent %s does not match details: %s",
-		spec.Continent, loc.Continent)
+			spec.Continent, loc.Continent)
 	}
 	if spec.CountryCode != "" && spec.CountryCode != loc.CountryCode {
 		return fmt.Errorf("spec country %s does not match details: %s",
-		spec.CountryCode, loc.CountryCode)
+			spec.CountryCode, loc.CountryCode)
 	}
 	return nil
+}
+
+func LocationEqual(loc1 Location, loc2 Location) bool {
+	return loc1.GlobalRegion == loc2.GlobalRegion &&
+		loc1.Continent == loc2.Continent &&
+		loc1.CountryCode == loc2.CountryCode
 }
