@@ -1,8 +1,5 @@
 package resources
 
-import (
-)
+import ()
 
 const AwsProvider = "aws"
-
-

@@ -6,8 +6,8 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/protobuf/types/known/anypb"
 	"log"
-	common "nephomancy/common/resources"
 	"nephomancy/aws/resources"
+	common "nephomancy/common/resources"
 )
 
 func checkVmSpec(db *sql.DB, avm resources.Ec2VM, spec common.Instance) error {
@@ -33,25 +33,24 @@ func resolveLocation(region string) (common.Location, error) {
 
 func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 	locations := make(map[string]string)
-        for _, vmset := range p.InstanceSets {
-                if vmset.Template.Location == nil {
-                        return fmt.Errorf("missing vmset location information")
-                }
-                if vmset.Template.Type == nil {
-                        return fmt.Errorf("missing vmset type information")
-                }
-                if vmset.Template.Os == "" {
-                        return fmt.Errorf("missing vmset os information")
-                }
-                if vmset.Template.ProviderDetails == nil {
-                        vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
-                }
-                // Special case: there already are provider details.
-                // Make sure they are consistent, otherwise print a warning.
-                if vmset.Template.ProviderDetails[resources.AwsProvider] != nil {
+	for _, vmset := range p.InstanceSets {
+		if vmset.Template.Location == nil {
+			return fmt.Errorf("missing vmset location information")
+		}
+		if vmset.Template.Type == nil {
+			return fmt.Errorf("missing vmset type information")
+		}
+		if vmset.Template.Os == "" {
+			return fmt.Errorf("missing vmset os information")
+		}
+		if vmset.Template.ProviderDetails == nil {
+			vmset.Template.ProviderDetails = make(map[string](*anypb.Any))
+		}
+		// Special case: there already are provider details.
+		// Make sure they are consistent, otherwise print a warning.
+		if vmset.Template.ProviderDetails[resources.AwsProvider] != nil {
 			var avm resources.Ec2VM
-			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[
-			resources.AwsProvider], &avm)
+			err := ptypes.UnmarshalAny(vmset.Template.ProviderDetails[resources.AwsProvider], &avm)
 			if err != nil {
 				return err
 			}
@@ -59,16 +58,16 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 				return err
 			}
 			log.Printf("Instance Set %s already has details for provider %s, leaving them a they are.\n",
-			vmset.Name, resources.AwsProvider)
+				vmset.Name, resources.AwsProvider)
 			locstring := common.PrintLocation(*vmset.Template.Location)
 			if locations[locstring] == "" {
 				locations[locstring] = avm.Region
 			}
-		} else {  // no provider details yet
+		} else { // no provider details yet
 			regions := RegionsForLocation(*vmset.Template.Location, "")
 			if len(regions) == 0 {
 				return fmt.Errorf("provider %s does not support regions matching location %v",
-				resources.AwsProvider, vmset.Template.Location)
+					resources.AwsProvider, vmset.Template.Location)
 			}
 			it, r, err := getInstanceTypeForSpec(db, *vmset.Template.Type, regions)
 			if err != nil {
@@ -78,7 +77,7 @@ func FillInProviderDetails(db *sql.DB, p *common.Project) error {
 
 			details, err := ptypes.MarshalAny(&resources.Ec2VM{
 				InstanceType: it,
-				Region: r[0],
+				Region:       r[0],
 			})
 			if err != nil {
 				return err

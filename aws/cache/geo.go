@@ -19,9 +19,9 @@ var UnsupportedRegions = map[string]bool{
 }
 
 type Region struct {
-	Description string
-	Country string
-	Continent string
+	Description     string
+	Country         string
+	Continent       string
 	IsSpecialRegion bool
 }
 
@@ -37,33 +37,33 @@ func initializeRegions() {
 	Regions = make(map[string]Region)
 	re := regexp.MustCompile(`([a-zA-Z ]+) \(([^\)]+)\)`)
 	for _, partition := range endpoints.DefaultPartitions() {
-                for _, rg := range partition.Regions() {
-                        regionId := rg.ID()
-                        desc := rg.Description()
-                        places := re.FindStringSubmatch(desc)
-                        continent := ""
-                        country := ""
-                        specialRegion := false
-                        if len(places) == 0 {
-                                continent = ContinentFromDisplayName(desc, "").String()
-                                specialRegion = true
-                        } else {
-                                continent = ContinentFromDisplayName(
-                                        places[1], places[2]).String()
-                                country = CountryFromDisplayName(
-                                        places[1], places[2])
-                                if IsSpecial(places[1]) {
-                                        specialRegion =true
-                                }
-                        }
+		for _, rg := range partition.Regions() {
+			regionId := rg.ID()
+			desc := rg.Description()
+			places := re.FindStringSubmatch(desc)
+			continent := ""
+			country := ""
+			specialRegion := false
+			if len(places) == 0 {
+				continent = ContinentFromDisplayName(desc, "").String()
+				specialRegion = true
+			} else {
+				continent = ContinentFromDisplayName(
+					places[1], places[2]).String()
+				country = CountryFromDisplayName(
+					places[1], places[2])
+				if IsSpecial(places[1]) {
+					specialRegion = true
+				}
+			}
 			Regions[regionId] = Region{
-				Description: desc,
-				Country: country,
-				Continent: continent,
+				Description:     desc,
+				Country:         country,
+				Continent:       continent,
 				IsSpecialRegion: specialRegion,
 			}
-                }
-        }
+		}
+	}
 }
 
 // Returns the common.geo continent for an AWS region.
@@ -251,7 +251,7 @@ func RegionsForLocation(loc common.Location, preferred string) []string {
 	}
 	if len(regions) == 0 {
 		if preferred == "" {
-			return RegionsByCountry("US")  // default to US
+			return RegionsByCountry("US") // default to US
 		} else {
 			regions = RegionsByCountry("US")
 		}
