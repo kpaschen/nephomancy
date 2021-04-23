@@ -425,38 +425,15 @@ func resolveLocation(region string) (common.Location, error) {
 	if cc == "Unknown" {
 		return common.Location{}, fmt.Errorf("unknown region %s", region)
 	}
-	continent, gr := geo.GetContinent(cc)
-	if continent == geo.UnknownC {
-		return common.Location{},
-			fmt.Errorf("no continent known for region %s.", region)
-	}
-	return common.Location{
-		GlobalRegion: gr.String(),
-		Continent:    continent.String(),
-		CountryCode:  cc,
-	}, nil
+	return common.CountryCodeToLocation(cc)
 }
 
-// Returns nil if region is consistent with the spec location,
-// an error otherwise.
 func checkLocation(region string, spec common.Location) error {
 	loc, err := resolveLocation(region)
 	if err != nil {
 		return err
 	}
-	if spec.GlobalRegion != "" && spec.GlobalRegion != loc.GlobalRegion {
-		return fmt.Errorf("spec global region %s does not match provider details (%s): %s",
-			spec.GlobalRegion, assets.GcloudProvider, loc.GlobalRegion)
-	}
-	if spec.Continent != "" && spec.Continent != loc.Continent {
-		return fmt.Errorf("spec continent %s does not match provider details (%s): %s",
-			spec.Continent, assets.GcloudProvider, loc.Continent)
-	}
-	if spec.CountryCode != "" && spec.CountryCode != loc.CountryCode {
-		return fmt.Errorf("spec country %s does not match provider details (%s): %s",
-			spec.CountryCode, assets.GcloudProvider, loc.CountryCode)
-	}
-	return nil
+	return common.CheckLocation(loc, spec)
 }
 
 // Retrieves a disk type satisfying the spec and available in at least
