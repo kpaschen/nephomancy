@@ -30,13 +30,13 @@ func TestGetInstanceTypeForSpec(t *testing.T) {
 		CpuCount: 1,
 		MemoryGb: 1,
 	}
-	it, regions, err := getInstanceTypeForSpec(db, spec, []string{ "us-east-1" })
+	it, regions, err := getInstanceTypeForSpec(db, spec, []string{"us-east-1"})
 	if err != nil {
 		t.Errorf("getInstanceTypeForSpec failed: %v\n", err)
 	}
 	if it != "t3.micro" || len(regions) != 1 || regions[0] != "us-east-1" {
 		t.Errorf("unexpected return values from getInstanceTypeForSpec. Wanted t3.micro, [ us-east-1 ] but got %s %v\n",
-		it, regions)
+			it, regions)
 
 	}
 }
