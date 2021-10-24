@@ -13,7 +13,8 @@ import (
 )
 
 func TestFillInProviderDetails(t *testing.T) {
-	provider, err := registry.GetProvider("gcloud")
+	// provider, err := registry.GetProvider("gcloud")
+	provider, err := registry.GetProvider(name)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
